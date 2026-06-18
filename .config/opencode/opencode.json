@@ -1,12 +1,5 @@
 {
   "$schema": "https://opencode.ai/config.json",
-  "permission": {
-    "external_directory": {
-      "/tmp/**": "allow"
-    }
-  },
-  "plugin": [
-    "@ex-machina/opencode-anthropic-auth",
-    "superpowers@git+https://github.com/obra/superpowers.git"
-  ]
+  "permission": "allow",
+  "plugin": []
 }
