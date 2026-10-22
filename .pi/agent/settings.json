@@ -38,9 +38,6 @@
   "defaultTools": [
     "+codemode"
   ],
-  "codemode": {
-    "mode": "on"
-  },
   "hideThinkingBlock": false,
   "treeFilterMode": "default",
   "theme": "catppuccin-mocha",
