@@ -1,0 +1,19 @@
+{
+  "name": "pi-dotfiles",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "bun build --compile --outfile .build/bin/emit-to-pi agent/extensions/background-terminals/bin/emit-to-pi.ts > /dev/null && bun build --compile --outfile .build/bin/pi-subagent agent/extensions/subagents/bin/pi-subagent.ts > /dev/null",
+    "postinstall": "bun run build"
+  },
+  "dependencies": {
+    "@earendil-works/pi-ai": "^1.2.0",
+    "@earendil-works/pi-coding-agent": "^1.2.0",
+    "@earendil-works/pi-tui": "^1.2.0",
+    "@effect/platform-bun": "4.0.4",
+    "effect": "4.0.4",
+    "proper-lockfile": "4.1.2",
+    "typebox": "1.3.27"
+  },
+  "packageManager": "bun@1.4.3"
+}

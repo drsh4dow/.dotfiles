@@ -6,3 +6,5 @@ sessions
 auth.json
 update-cache.json
 web-search.json
+.pi/node_modules/
+.pi/.build/
