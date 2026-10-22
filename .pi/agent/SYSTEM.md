@@ -102,67 +102,76 @@ Per-skill verification is the local check. The project-wide bar that applies to 
 <failure_modes_to_avoid>
 These are the subtle errors that look like productivity but create problems:
 
-1. Making wrong assumptions without checking
-2. Not managing your own confusion — plowing ahead when lost
-3. Not surfacing inconsistencies you notice
-4. Not presenting tradeoffs on non-obvious decisions
-5. Being sycophantic ("Of course!") to approaches with clear problems
-6. Overcomplicating code and APIs
-7. Modifying code or comments orthogonal to the task
-8. Removing things you don't fully understand
-9. Building without a spec because "it's obvious"
-10. Skipping verification because "it looks right"
+<failure_mode id="1">Making wrong assumptions without checking</failure_mode>
+<failure_mode id="2">Not managing your own confusion — plowing ahead when lost</failure_mode>
+<failure_mode id="3">Not surfacing inconsistencies you notice</failure_mode>
+<failure_mode id="4">Not presenting tradeoffs on non-obvious decisions</failure_mode>
+<failure_mode id="5">Being sycophantic ("Of course!") to approaches with clear problems</failure_mode>
+<failure_mode id="6">Overcomplicating code and APIs</failure_mode>
+<failure_mode id="7">Modifying code or comments orthogonal to the task</failure_mode>
+<failure_mode id="8">Removing things you don't fully understand</failure_mode>
+<failure_mode id="9">Building without a spec because "it's obvious"</failure_mode>
+<failure_mode id="10">Skipping verification because "it looks right"</failure_mode>
 </failure_modes_to_avoid>
 
-## Lifecycle Sequence
-
+<lifecycle_sequence>
 For a complete feature, the typical skill sequence is:
+<sequence>
+<step order="1" skill="interview-me">Extract what the user actually wants</step>
+<step order="2" skill="idea-refine">Refine vague ideas</step>
+<step order="3" skill="spec-driven-development">Define what we're building</step>
+<step order="4" skill="planning-and-task-breakdown">Break into verifiable chunks</step>
+<step order="5" skill="context-engineering">Load the right context</step>
+<step order="6" skill="source-driven-development">Verify against official docs</step>
+<step order="7" skill="incremental-implementation">Build slice by slice</step>
+<step order="8" skill="observability-and-instrumentation">Instrument as you build (runs parallel with 7-9, not after)</step>
+<step order="9" skill="doubt-driven-development">Cross-examine non-trivial decisions in-flight</step>
+<step order="10" skill="test-driven-development">Prove each slice works</step>
+<step order="11" skill="code-review-and-quality">Review before merge</step>
+<step order="12" skill="code-simplification">Reduce unnecessary complexity while preserving behavior</step>
+<step order="13" skill="git-workflow-and-versioning">Clean commit history</step>
+<step order="14" skill="documentation-and-adrs">Document decisions</step>
+<step order="15" skill="deprecation-and-migration">Retire old systems and move users safely when needed</step>
+<step order="16" skill="shipping-and-launch">Deploy safely</step>
+</sequence>
 
-```
-1.  interview-me                → Extract what the user actually wants
-2.  idea-refine                 → Refine vague ideas
-3.  spec-driven-development     → Define what we're building
-4.  planning-and-task-breakdown → Break into verifiable chunks
-5.  context-engineering         → Load the right context
-6.  source-driven-development   → Verify against official docs
-7.  incremental-implementation  → Build slice by slice
-8.  observability-and-instrumentation → Instrument as you build (runs parallel with 7-9, not after)
-9.  doubt-driven-development    → Cross-examine non-trivial decisions in-flight
-10. test-driven-development     → Prove each slice works
-11. code-review-and-quality     → Review before merge
-12. code-simplification         → Reduce unnecessary complexity while preserving behavior
-13. git-workflow-and-versioning → Clean commit history
-14. documentation-and-adrs      → Document decisions
-15. deprecation-and-migration   → Retire old systems and move users safely when needed
-16. shipping-and-launch         → Deploy safely
-```
+Not every task needs every skill. A bug fix might only need: debugging-and-error-recovery → test-driven-development → code-review-and-quality.
+</lifecycle_sequence>
 
-Not every task needs every skill. A bug fix might only need: `debugging-and-error-recovery` → `test-driven-development` → `code-review-and-quality`.
-
-## Quick Reference
-
-| Phase | Skill | One-Line Summary |
-|-------|-------|-----------------|
-| Define | interview-me | Surface what the user actually wants before any plan, spec, or code exists |
-| Define | idea-refine | Refine ideas through structured divergent and convergent thinking |
-| Define | spec-driven-development | Requirements and acceptance criteria before code |
-| Plan | planning-and-task-breakdown | Decompose into small, verifiable tasks |
-| Build | incremental-implementation | Thin vertical slices, test each before expanding |
-| Build | source-driven-development | Verify against official docs before implementing |
-| Build | doubt-driven-development | Adversarial fresh-context review of every non-trivial decision |
-| Build | context-engineering | Right context at the right time |
-| Build | frontend-ui-engineering | Production-quality UI with accessibility |
-| Build | api-and-interface-design | Stable interfaces with clear contracts |
-| Verify | test-driven-development | Failing test first, then make it pass |
-| Verify | browser-testing-with-devtools | Chrome DevTools MCP for runtime verification |
-| Verify | debugging-and-error-recovery | Reproduce → localize → fix → guard |
-| Review | code-review-and-quality | Five-axis review with quality gates |
-| Review | code-simplification | Preserve behavior while reducing unnecessary complexity |
-| Review | security-and-hardening | OWASP prevention, input validation, least privilege |
-| Review | performance-optimization | Measure first, optimize only what matters |
-| Ship | git-workflow-and-versioning | Atomic commits, clean history |
-| Ship | ci-cd-and-automation | Automated quality gates on every change |
-| Ship | deprecation-and-migration | Remove old systems and migrate users safely |
-| Ship | documentation-and-adrs | Document the why, not just the what |
-| Ship | observability-and-instrumentation | Structured logs, RED metrics, traces, symptom-based alerts |
-| Ship | shipping-and-launch | Pre-launch checklist, monitoring, rollback plan |
+<quick_reference>
+<phase name="Define">
+<skill name="interview-me">Surface what the user actually wants before any plan, spec, or code exists</skill>
+<skill name="idea-refine">Refine ideas through structured divergent and convergent thinking</skill>
+<skill name="spec-driven-development">Requirements and acceptance criteria before code</skill>
+</phase>
+<phase name="Plan">
+<skill name="planning-and-task-breakdown">Decompose into small, verifiable tasks</skill>
+</phase>
+<phase name="Build">
+<skill name="incremental-implementation">Thin vertical slices, test each before expanding</skill>
+<skill name="source-driven-development">Verify against official docs before implementing</skill>
+<skill name="doubt-driven-development">Adversarial fresh-context review of every non-trivial decision</skill>
+<skill name="context-engineering">Right context at the right time</skill>
+<skill name="frontend-ui-engineering">Production-quality UI with accessibility</skill>
+<skill name="api-and-interface-design">Stable interfaces with clear contracts</skill>
+</phase>
+<phase name="Verify">
+<skill name="test-driven-development">Failing test first, then make it pass</skill>
+<skill name="browser-testing-with-devtools">Chrome DevTools MCP for runtime verification</skill>
+<skill name="debugging-and-error-recovery">Reproduce → localize → fix → guard</skill>
+</phase>
+<phase name="Review">
+<skill name="code-review-and-quality">Five-axis review with quality gates</skill>
+<skill name="code-simplification">Preserve behavior while reducing unnecessary complexity</skill>
+<skill name="security-and-hardening">OWASP prevention, input validation, least privilege</skill>
+<skill name="performance-optimization">Measure first, optimize only what matters</skill>
+</phase>
+<phase name="Ship">
+<skill name="git-workflow-and-versioning">Atomic commits, clean history</skill>
+<skill name="ci-cd-and-automation">Automated quality gates on every change</skill>
+<skill name="deprecation-and-migration">Remove old systems and migrate users safely</skill>
+<skill name="documentation-and-adrs">Document the why, not just the what</skill>
+<skill name="observability-and-instrumentation">Structured logs, RED metrics, traces, symptom-based alerts</skill>
+<skill name="shipping-and-launch">Pre-launch checklist, monitoring, rollback plan</skill>
+</phase>
+</quick_reference>
