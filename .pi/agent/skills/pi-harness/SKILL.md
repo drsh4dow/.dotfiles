@@ -10,7 +10,7 @@ user-invokable: false
 Locate the root of the running pi installation, `<pi>`:
 
 ```sh
-d="${PI_PACKAGE_DIR:-$(dirname "$(readlink -f "$(command -v pi)")")}"; while [ "$d" != / ] && ! grep -Eqs '"name": *"@earendil-works/pi-coding-agent"' "$d/package.json"; do d=$(dirname "$d"); done; echo "$d"
+d=$(readlink -f "${PI_PACKAGE_DIR:-$(command -v pi)}"); while [ "${d:-/}" != / ] && ! grep -Eqs '"name": *"@earendil-works/pi-coding-agent"' "$d/package.json"; do d=$(dirname "$d"); done; echo "${d:-/}"
 ```
 
 Pi documentation:

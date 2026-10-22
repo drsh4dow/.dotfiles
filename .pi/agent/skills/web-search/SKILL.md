@@ -12,12 +12,12 @@ same script, and return only what the answer needs: titles, URLs, dates, and
 the decisive passages. Codemode cuts output past 10,000 tokens from the middle,
 so a script that returns whole results loses part of what it retrieved.
 
-| Need | Route |
-| --- | --- |
-| Discover sources | `tools.mcp__perplexity__perplexity_search` |
-| Read known URLs | `tools.mcp__exa__web_fetch_exa` |
-| GitHub issues, PRs, code, or repositories | `gh search` through `tools.bash` |
-| Login, forms, clicks, or visual state | the `agent-browser` skill |
+| Need                                      | Route                                      |
+| ----------------------------------------- | ------------------------------------------ |
+| Discover sources                          | `tools.mcp__perplexity__perplexity_search` |
+| Read known URLs                           | `tools.mcp__exa__web_fetch_exa`            |
+| GitHub issues, PRs, code, or repositories | `gh search` through `tools.bash`           |
+| Login, forms, clicks, or visual state     | the `agent-browser` skill                  |
 
 GitHub allows 30 search requests a minute across `gh search` commands, so
 start with two or three targeted queries and read the items they find.
