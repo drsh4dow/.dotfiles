@@ -1,44 +1,60 @@
+import { Clock, Effect } from "effect";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 
-import { Clock, Effect } from "effect";
+const MS_PER_SECOND = 1000;
 
-export default function (pi: ExtensionAPI) {
-  let agentStartMs: number | null = null;
+type UsageField = "cacheRead" | "cacheWrite" | "input" | "output" | "totalTokens";
+
+type UsageTotals = Readonly<Record<UsageField, number>>;
+
+function now(): number {
+  return Effect.runSync(Clock.currentTimeMillis);
+}
+
+function totalUsage(usages: readonly UsageTotals[]): UsageTotals {
+  const total = (field: UsageField): number =>
+    usages.reduce((sum, usage) => sum + (usage[field] || 0), 0);
+
+  return {
+    cacheRead: total("cacheRead"),
+    cacheWrite: total("cacheWrite"),
+    input: total("input"),
+    output: total("output"),
+    totalTokens: total("totalTokens"),
+  };
+}
+
+function formatReport(usage: UsageTotals, elapsedSeconds: number): string {
+  const tokensPerSecond = usage.output / elapsedSeconds;
+
+  return `TPS ${tokensPerSecond.toFixed(1)} tok/s. out ${usage.output.toLocaleString()}, in ${usage.input.toLocaleString()}, cache r/w ${usage.cacheRead.toLocaleString()}/${usage.cacheWrite.toLocaleString()}, total ${usage.totalTokens.toLocaleString()}, ${elapsedSeconds.toFixed(1)}s`;
+}
+
+export default function tpsTracker(pi: ExtensionAPI): void {
+  let agentStartMs: number | undefined;
 
   pi.on("agent_start", () => {
-    agentStartMs = Effect.runSync(Clock.currentTimeMillis);
+    agentStartMs = now();
   });
 
   pi.on("agent_end", (event, ctx) => {
-    if (!ctx.hasUI) return;
+    const startedAt = agentStartMs;
+    agentStartMs = undefined;
 
-    if (agentStartMs === null) return;
-
-    const elapsedMs = Effect.runSync(Clock.currentTimeMillis) - agentStartMs;
-    agentStartMs = null;
-
-    if (elapsedMs <= 0) return;
-
-    let input = 0;
-    let output = 0;
-    let cacheRead = 0;
-    let cacheWrite = 0;
-    let totalTokens = 0;
-
-    for (const message of event.messages) {
-      if (message.role !== "assistant") continue;
-      input += message.usage.input || 0;
-      output += message.usage.output || 0;
-      cacheRead += message.usage.cacheRead || 0;
-      cacheWrite += message.usage.cacheWrite || 0;
-      totalTokens += message.usage.totalTokens || 0;
+    if (!ctx.hasUI || startedAt === undefined) {
+      return;
     }
 
-    if (output <= 0) return;
+    const elapsedMs = now() - startedAt;
 
-    const elapsedSeconds = elapsedMs / 1000;
-    const tokensPerSecond = output / elapsedSeconds;
-    const message = `TPS ${tokensPerSecond.toFixed(1)} tok/s. out ${output.toLocaleString()}, in ${input.toLocaleString()}, cache r/w ${cacheRead.toLocaleString()}/${cacheWrite.toLocaleString()}, total ${totalTokens.toLocaleString()}, ${elapsedSeconds.toFixed(1)}s`;
-    ctx.ui.notify(message, "info");
+    const usage = totalUsage(
+      event.messages.flatMap((message) => (message.role === "assistant" ? [message.usage] : [])),
+    );
+
+    if (elapsedMs <= 0 || usage.output <= 0) {
+      return;
+    }
+
+    ctx.ui.notify(formatReport(usage, elapsedMs / MS_PER_SECOND), "info");
   });
 }

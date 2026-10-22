@@ -3,153 +3,242 @@ import type {
   ExtensionContext,
   SessionMessageEntry,
 } from "@earendil-works/pi-coding-agent";
-import { Text } from "@earendil-works/pi-tui";
 import { Schema } from "effect";
+import { Text } from "@earendil-works/pi-tui";
 
 const MOMENT_ENTRY = "session-timer-moment";
 
+const MS_PER_SECOND = 1000;
+
+const SECONDS_PER_MINUTE = 60;
+
+const MINUTES_PER_HOUR = 60;
+
+const HOURS_PER_DAY = 24;
+
+const SECONDS_PER_HOUR = SECONDS_PER_MINUTE * MINUTES_PER_HOUR;
+
+const SECONDS_PER_DAY = SECONDS_PER_HOUR * HOURS_PER_DAY;
+
+const CLOCK_DIGITS = 2;
+
 const isElapsedMilliseconds = Schema.is(Schema.Finite.check(Schema.isGreaterThanOrEqualTo(0)));
 
-function formatDuration(milliseconds: number): string {
-  const totalSeconds = Math.round(milliseconds / 1000);
-  const seconds = totalSeconds % 60;
-  const minutes = Math.floor(totalSeconds / 60) % 60;
-  const hours = Math.floor(totalSeconds / 3600) % 24;
-  const days = Math.floor(totalSeconds / 86400);
-  const paddedSeconds = String(seconds).padStart(2, "0");
-  const paddedMinutes = String(minutes).padStart(2, "0");
+function padClock(value: number): string {
+  return String(value).padStart(CLOCK_DIGITS, "0");
+}
 
-  if (days > 0) return `${days}d ${hours}h ${paddedMinutes}m ${paddedSeconds}s`;
+function formatClock(totalSeconds: number, padMinutes: boolean): string {
+  const hours = Math.floor(totalSeconds / SECONDS_PER_HOUR);
+  const minutes = Math.floor(totalSeconds / SECONDS_PER_MINUTE) % MINUTES_PER_HOUR;
+  const seconds = totalSeconds % SECONDS_PER_MINUTE;
 
-  if (totalSeconds >= 3600) return `${hours}h ${minutes}m ${paddedSeconds}s`;
+  if (padMinutes) {
+    return `${hours}h ${padClock(minutes)}m ${padClock(seconds)}s`;
+  }
 
-  if (totalSeconds >= 60) return `${minutes}m ${paddedSeconds}s`;
+  if (hours > 0) {
+    return `${hours}h ${minutes}m ${padClock(seconds)}s`;
+  }
+
+  if (minutes > 0) {
+    return `${minutes}m ${padClock(seconds)}s`;
+  }
 
   return `${seconds}s`;
+}
+
+function formatDuration(milliseconds: number): string {
+  const totalSeconds = Math.round(milliseconds / MS_PER_SECOND);
+  const days = Math.floor(totalSeconds / SECONDS_PER_DAY);
+  const clock = formatClock(totalSeconds % SECONDS_PER_DAY, days > 0);
+
+  return days > 0 ? `${days}d ${clock}` : clock;
 }
 
 function messageTime(entry: SessionMessageEntry): number | undefined {
   switch (entry.message.role) {
     case "user":
-    case "toolResult":
+    case "toolResult": {
       return entry.message.timestamp;
-    case "assistant":
+    }
+
+    case "assistant": {
       // The message timestamp is generation start; the entry records completion.
       return Date.parse(entry.timestamp);
+    }
+
     case "bashExecution":
     case "branchSummary":
     case "compactionSummary":
     case "custom":
-    case "system":
+    case "system": {
       return undefined;
+    }
+
     default: {
       const unexpected: never = entry.message;
+
       throw new Error(`Unexpected session message: ${JSON.stringify(unexpected)}`);
     }
   }
 }
 
-export default function sessionTimer(pi: ExtensionAPI): void {
-  let origin: number | undefined;
-  let pendingResponse = false;
+function latestMessageEntry(ctx: ExtensionContext): SessionMessageEntry | undefined {
+  let entry = ctx.sessionManager.getLeafEntry();
 
-  function elapsedAt(timestamp: number): number | undefined {
-    if (origin === undefined) return undefined;
-    const elapsed = timestamp - origin;
-
-    return Number.isFinite(elapsed) ? Math.max(0, elapsed) : undefined;
+  while (entry && entry.type !== "message") {
+    entry = entry.parentId === null ? undefined : ctx.sessionManager.getEntry(entry.parentId);
   }
 
-  function showDuration(ctx: ExtensionContext, timestamp?: number): void {
-    if (ctx.mode !== "tui") return;
-    const elapsed = timestamp === undefined ? undefined : elapsedAt(timestamp);
+  return entry;
+}
+
+function hasText({ message }: SessionMessageEntry): boolean {
+  return (
+    message.role === "assistant" &&
+    message.content.some((block) => block.type === "text" && block.text.trim().length > 0)
+  );
+}
+
+class SessionTimer {
+  readonly #pi: ExtensionAPI;
+
+  #origin: number | undefined;
+
+  #pendingResponse = false;
+
+  public constructor(pi: ExtensionAPI) {
+    this.#pi = pi;
+  }
+
+  public reset(ctx: ExtensionContext): void {
+    this.#origin = undefined;
+    this.#pendingResponse = false;
+    this.showDuration(ctx);
+  }
+
+  public restore(ctx: ExtensionContext): void {
+    const messages = ctx.sessionManager
+      .getBranch()
+      .filter((entry): entry is SessionMessageEntry => entry.type === "message");
+
+    const userTimes = messages.flatMap(({ message }) =>
+      message.role === "user" ? [message.timestamp] : [],
+    );
+
+    const times = messages.flatMap((entry) => messageTime(entry) ?? []);
+
+    [this.#origin] = userTimes;
+    this.#pendingResponse = false;
+    this.showDuration(ctx, times.at(-1));
+  }
+
+  public startUserMessage(ctx: ExtensionContext, timestamp: number): void {
+    this.#origin ??= timestamp;
+    this.showDuration(ctx, timestamp);
+  }
+
+  public endAssistantMessage(): void {
+    this.#pendingResponse = true;
+  }
+
+  public showDuration(ctx: ExtensionContext, timestamp?: number): void {
+    if (ctx.mode !== "tui") {
+      return;
+    }
+
+    const elapsed = timestamp === undefined ? undefined : this.elapsedAt(timestamp);
+
     ctx.ui.setStatus(
       "session-timer",
       elapsed === undefined ? undefined : ctx.ui.theme.fg("dim", `⏱ ${formatDuration(elapsed)}`),
     );
   }
 
-  function restore(ctx: ExtensionContext): void {
-    origin = undefined;
-    pendingResponse = false;
-    let latest: number | undefined;
-
-    for (const entry of ctx.sessionManager.getBranch()) {
-      if (entry.type !== "message") continue;
-
-      if (entry.message.role === "user") origin ??= entry.message.timestamp;
-      const timestamp = messageTime(entry);
-
-      if (timestamp !== undefined) latest = timestamp;
+  public finishResponse(ctx: ExtensionContext): void {
+    if (!this.#pendingResponse) {
+      return;
     }
 
-    showDuration(ctx, latest);
-  }
+    this.#pendingResponse = false;
 
-  function finishResponse(ctx: ExtensionContext): void {
-    if (!pendingResponse) return;
-    pendingResponse = false;
-
-    // message_end precedes persistence. These hooks run after the assistant is
+    // A message_end event precedes persistence. These hooks run after the assistant is
     // saved, before any tool results, so only extension metadata can follow it.
-    let entry = ctx.sessionManager.getLeafEntry();
+    const entry = latestMessageEntry(ctx);
 
-    while (entry && entry.type !== "message") {
-      entry = entry.parentId === null ? undefined : ctx.sessionManager.getEntry(entry.parentId);
+    if (entry?.message.role !== "assistant") {
+      return;
     }
-
-    if (entry?.type !== "message" || entry.message.role !== "assistant") return;
 
     const timestamp = messageTime(entry);
-    showDuration(ctx, timestamp);
 
-    if (timestamp === undefined) return;
-    const elapsed = elapsedAt(timestamp);
+    this.showDuration(ctx, timestamp);
 
-    const hasText = entry.message.content.some(
-      (block) => block.type === "text" && block.text.trim().length > 0,
-    );
-
-    if (elapsed !== undefined && hasText) pi.appendEntry(MOMENT_ENTRY, elapsed);
+    if (timestamp !== undefined && hasText(entry)) {
+      this.recordMoment(timestamp);
+    }
   }
 
-  pi.registerEntryRenderer(MOMENT_ENTRY, (entry, _options, theme) => {
-    const elapsed = entry.data;
+  private recordMoment(timestamp: number): void {
+    const elapsed = this.elapsedAt(timestamp);
 
-    if (!isElapsedMilliseconds(elapsed)) return undefined;
+    if (elapsed !== undefined) {
+      this.#pi.appendEntry(MOMENT_ENTRY, elapsed);
+    }
+  }
 
-    return new Text(theme.fg("dim", `⏱ ${formatDuration(elapsed)}`), 1, 0);
-  });
+  private elapsedAt(timestamp: number): number | undefined {
+    if (this.#origin === undefined) {
+      return undefined;
+    }
+
+    const elapsed = timestamp - this.#origin;
+
+    return Number.isFinite(elapsed) ? Math.max(0, elapsed) : undefined;
+  }
+}
+
+export default function sessionTimer(pi: ExtensionAPI): void {
+  const timer = new SessionTimer(pi);
+
+  pi.registerEntryRenderer(MOMENT_ENTRY, (entry, _options, theme) =>
+    isElapsedMilliseconds(entry.data)
+      ? new Text(theme.fg("dim", `⏱ ${formatDuration(entry.data)}`), 1, 0)
+      : undefined,
+  );
 
   pi.on("session_start", (_event, ctx) => {
-    restore(ctx);
+    timer.restore(ctx);
   });
   pi.on("session_tree", (_event, ctx) => {
-    restore(ctx);
+    timer.restore(ctx);
   });
 
   pi.on("message_start", ({ message }, ctx) => {
-    if (message.role !== "user") return;
-    origin ??= message.timestamp;
-    showDuration(ctx, message.timestamp);
+    if (message.role === "user") {
+      timer.startUserMessage(ctx, message.timestamp);
+    }
   });
 
   pi.on("message_end", ({ message }, ctx) => {
-    if (message.role === "assistant") pendingResponse = true;
+    if (message.role === "assistant") {
+      timer.endAssistantMessage();
+    }
 
-    if (message.role === "toolResult") showDuration(ctx, message.timestamp);
+    if (message.role === "toolResult") {
+      timer.showDuration(ctx, message.timestamp);
+    }
   });
 
   pi.on("tool_execution_start", (_event, ctx) => {
-    finishResponse(ctx);
+    timer.finishResponse(ctx);
   });
   pi.on("turn_end", (_event, ctx) => {
-    finishResponse(ctx);
+    timer.finishResponse(ctx);
   });
 
   pi.on("session_shutdown", (_event, ctx) => {
-    origin = undefined;
-    pendingResponse = false;
-    showDuration(ctx);
+    timer.reset(ctx);
   });
 }

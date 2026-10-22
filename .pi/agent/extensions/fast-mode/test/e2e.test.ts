@@ -1,158 +1,180 @@
-import assert from "node:assert/strict";
-// Pure path operations do not need an Effect service.
-// @effect-diagnostics-next-line nodeBuiltinImport:off
-import { join } from "node:path";
-import { describe } from "node:test";
 import * as BunFileSystem from "@effect/platform-bun/BunFileSystem";
 import { Effect, FileSystem, Schema } from "effect";
 import {
-  capture,
-  e2eUnavailable,
-  isDead,
+  type FastModeConfig,
+  FastModeSettings,
+  type PiModel,
+  describeRequestFields,
+  fastRequestFields,
+} from "../config.ts";
+import {
   type PiSession,
+  capture,
+  isDead,
   prompt,
   readStderr,
   sendKeys,
-  setupPiSession,
-  testEffect,
   waitFor,
 } from "../../test/tmux.ts";
-import {
-  describeRequestFields,
-  type FastModeConfig,
-  FastModeSettings,
-  fastRequestFields,
-} from "../index.ts";
+import { e2eUnavailable, setupPiSession, testEffect } from "../../test/pi-session.ts";
+import assert from "node:assert/strict";
+import { describe } from "node:test";
+// @effect-diagnostics-next-line nodeBuiltinImport:off
+import path from "node:path";
 
-const skip = e2eUnavailable();
+const NOTICE_TIMEOUT_MS = 30_000;
 
-function footerModel(pane: string) {
-  const matches = [...pane.matchAll(/\(([a-z0-9-]+)\)\s+(\S+)\s+•/g)];
-  const last = matches.at(-1);
-  const [, provider, id] = last ?? [];
+const INDICATOR_TIMEOUT_MS = 5000;
+
+const FOOTER_MODEL = /\((?<provider>[a-z0-9-]+)\)\s+(?<id>\S+)\s+•/gu;
+
+const FAST_MODE_LINE = /^.*Fast mode .*$/gmu;
+
+const UNCAUGHT_EXCEPTION = /uncaughtException/u;
+
+type E2ERun = Readonly<{
+  config: FastModeConfig | undefined;
+  initialEnabled: boolean;
+  model: PiModel;
+  session: PiSession;
+}>;
+
+function footerModel(pane: string): PiModel {
+  const groups = [...pane.matchAll(FOOTER_MODEL)].at(-1)?.groups;
+  const provider = groups?.provider;
+  const id = groups?.id;
+
   assert.ok(
     provider !== undefined && id !== undefined,
     `could not read the footer model from pane:\n${pane}`,
   );
 
-  return { provider, id };
+  return { id, provider };
 }
 
-const savedConfig = Effect.fn("savedConfig")(function* (session: PiSession) {
+const savedConfig = Effect.fn("savedConfig")(function* savedConfig(session: PiSession) {
   const fs = yield* FileSystem.FileSystem;
-
-  const settings = yield* Schema.decodeEffect(Schema.fromJsonString(FastModeSettings))(
-    yield* fs.readFileString(join(session.agentDir, "settings.json")),
-  );
+  const text = yield* fs.readFileString(path.join(session.agentDir, "settings.json"));
+  const settings = yield* Schema.decodeEffect(Schema.fromJsonString(FastModeSettings))(text);
 
   return settings.fastMode;
 }, Effect.provide(BunFileSystem.layer));
 
-const persistedEnabled = Effect.fn("persistedEnabled")(function* (session: PiSession) {
+const persistedEnabled = Effect.fn("persistedEnabled")(function* persistedEnabled(
+  session: PiSession,
+) {
   const config = yield* savedConfig(session);
 
   return config?.enabled === true;
 });
 
-function escapeRegExp(text: string) {
-  return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+const observeRun = Effect.fn("observeRun")(function* observeRun(session: PiSession) {
+  const run: E2ERun = {
+    config: yield* savedConfig(session),
+    initialEnabled: yield* persistedEnabled(session),
+    model: footerModel(yield* capture(session)),
+    session,
+  };
+
+  return run;
+});
+
+function escapeRegExp(text: string): string {
+  return text.replaceAll(/[.*+?^${}()|[\]\\]/gu, String.raw`\$&`);
 }
 
-function noticeFor(
-  enabled: boolean,
-  config: FastModeConfig | undefined,
-  model: { provider: string; id: string },
-) {
-  if (!enabled) return /Fast mode disabled\./;
+function noticeFor(enabled: boolean, { config, model }: E2ERun): RegExp {
+  if (!enabled) {
+    return /Fast mode disabled\./u;
+  }
+
   // The tmux session starts without --name, so it is never a subagent session.
-  const fields = fastRequestFields(config, model, undefined);
+  const fields = fastRequestFields(config, model);
 
   return fields
-    ? new RegExp(escapeRegExp(`Fast mode enabled (${describeRequestFields(fields)}).`))
-    : /Fast mode enabled, but .+ is not listed in the fastMode setting\./;
+    ? new RegExp(escapeRegExp(`Fast mode enabled (${describeRequestFields(fields)}).`), "u")
+    : /Fast mode enabled, but .+ is not listed in the fastMode setting\./u;
 }
 
-describe("fast-mode (real pi in tmux)", { skip }, () => {
-  let session: PiSession;
-  let model: { provider: string; id: string };
-  let config: FastModeConfig | undefined;
-  let initialEnabled: boolean;
-  let expected: boolean;
+const assertPaneHealthy = Effect.fn("assertPaneHealthy")(function* assertPaneHealthy(
+  session: PiSession,
+  expected: RegExp,
+  problem: string,
+) {
+  assert.equal(yield* isDead(session), false);
+  assert.doesNotMatch(yield* readStderr(session), UNCAUGHT_EXCEPTION);
 
-  setupPiSession(
-    (value) => {
-      session = value;
-    },
-    (value) =>
-      Effect.gen(function* () {
-        initialEnabled = yield* persistedEnabled(value);
-        expected = initialEnabled;
-        model = footerModel(yield* capture(value));
-        config = yield* savedConfig(value);
-      }),
+  const pane = yield* capture(session);
+
+  assert.match(pane, expected, `${problem}:\n${pane}`);
+});
+
+const toggle = Effect.fn("toggle")(function* toggle<E>(
+  run: E2ERun,
+  trigger: Effect.Effect<void, E>,
+  description: string,
+) {
+  const next = !(yield* persistedEnabled(run.session));
+
+  yield* trigger;
+  yield* waitFor(
+    run.session,
+    (pane) => noticeFor(next, run).test(pane.match(FAST_MODE_LINE)?.at(-1) ?? ""),
+    { description, timeoutMs: NOTICE_TIMEOUT_MS },
+  );
+  assert.equal(
+    yield* persistedEnabled(run.session),
+    next,
+    "settings.json fastMode.enabled does not reflect the announced state",
   );
 
-  const toggle = Effect.fn("toggle")(function* <E>(
-    trigger: Effect.Effect<void, E>,
-    description: string,
-  ) {
-    const next = !expected;
-    yield* trigger;
-    yield* waitFor(
-      session,
-      (pane) => noticeFor(next, config, model).test(pane.match(/^.*Fast mode .*$/gm)?.at(-1) ?? ""),
-      { timeoutMs: 30_000, description },
-    );
-    expected = next;
-    assert.equal(
-      yield* persistedEnabled(session),
-      next,
-      "settings.json fastMode.enabled does not reflect the announced state",
-    );
-    // The footer renders on its own frame after the notice.
-    const indicatorShown = next && fastRequestFields(config, model, undefined) !== undefined;
-    yield* waitFor(session, (pane) => /\u26a1\ufe0e? Fast/.test(pane) === indicatorShown, {
-      timeoutMs: 5_000,
-      description: `footer indicator ${indicatorShown ? "shown" : "hidden"}`,
-    });
-    assert.equal(yield* isDead(session), false);
-  });
+  const indicatorShown = next && fastRequestFields(run.config, run.model) !== undefined;
 
-  testEffect("registers the extension without crashing", function* () {
-    assert.equal(yield* isDead(session), false);
-    assert.doesNotMatch(yield* readStderr(session), /uncaughtException/);
-    const pane = yield* capture(session);
-    assert.match(
-      pane,
-      /\[Extensions\][\s\S]*fast-mode/,
-      `fast-mode missing from the startup banner:\n${pane}`,
+  yield* waitFor(run.session, (pane) => /\u26A1\uFE0E? Fast/u.test(pane) === indicatorShown, {
+    description: `footer indicator ${indicatorShown ? "shown" : "hidden"}`,
+    timeoutMs: INDICATOR_TIMEOUT_MS,
+  });
+  assert.equal(yield* isDead(run.session), false);
+});
+
+describe("fast-mode (real pi in tmux)", { skip: e2eUnavailable() }, () => {
+  let run: E2ERun;
+
+  setupPiSession((session) =>
+    Effect.gen(function* observe() {
+      run = yield* observeRun(session);
+    }),
+  );
+
+  testEffect("registers the extension without crashing", function* registersExtension() {
+    yield* assertPaneHealthy(
+      run.session,
+      /\[Extensions\][\s\S]*fast-mode/u,
+      "fast-mode missing from the startup banner",
     );
   });
 
-  testEffect("/fast flips the announced state and persists it", function* () {
-    yield* toggle(prompt(session, "/fast"), "first /fast notice");
+  testEffect("/fast flips the announced state and persists it", function* firstToggle() {
+    yield* toggle(run, prompt(run.session, "/fast"), "first /fast notice");
     assert.notEqual(
-      yield* persistedEnabled(session),
-      initialEnabled,
+      yield* persistedEnabled(run.session),
+      run.initialEnabled,
       "/fast did not change the persisted setting",
     );
   });
 
-  testEffect("/fast again flips back to the original state", function* () {
-    yield* toggle(prompt(session, "/fast"), "second /fast notice");
-    assert.equal(yield* persistedEnabled(session), initialEnabled);
+  testEffect("/fast again flips back to the original state", function* secondToggle() {
+    yield* toggle(run, prompt(run.session, "/fast"), "second /fast notice");
+    assert.equal(yield* persistedEnabled(run.session), run.initialEnabled);
   });
 
-  testEffect("the ctrl+alt+m shortcut toggles the same state", function* () {
-    yield* toggle(sendKeys(session, "C-M-m"), "shortcut notice (off)");
-    yield* toggle(sendKeys(session, "C-M-m"), "shortcut notice (back on)");
-    assert.equal(yield* persistedEnabled(session), initialEnabled);
+  testEffect("the ctrl+alt+m shortcut toggles the same state", function* shortcutToggles() {
+    yield* toggle(run, sendKeys(run.session, "C-M-m"), "shortcut notice (off)");
+    yield* toggle(run, sendKeys(run.session, "C-M-m"), "shortcut notice (back on)");
+    assert.equal(yield* persistedEnabled(run.session), run.initialEnabled);
   });
 
-  testEffect("survives the toggles cleanly", function* () {
-    assert.equal(yield* isDead(session), false);
-    assert.doesNotMatch(yield* readStderr(session), /uncaughtException/);
-    const pane = yield* capture(session);
-    assert.match(pane, /%\/\d/, `footer stopped rendering:\n${pane}`);
+  testEffect("survives the toggles cleanly", function* survivesToggles() {
+    yield* assertPaneHealthy(run.session, /%\/\d/u, "footer stopped rendering");
   });
 });

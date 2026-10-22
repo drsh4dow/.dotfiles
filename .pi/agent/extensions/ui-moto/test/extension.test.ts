@@ -1,131 +1,128 @@
+import { type Component, visibleWidth } from "@earendil-works/pi-tui";
+import { type FauxProviderHandle, fauxProvider } from "@earendil-works/pi-ai";
+import test, { type TestContext } from "node:test";
+import { CountingTui } from "../../test/counting-tui.ts";
+import { SdkSession } from "../../test/sdk-session.ts";
 import assert from "node:assert/strict";
-import test from "node:test";
-import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
-import { type TUI, visibleWidth } from "@earendil-works/pi-tui";
-import { extensionTestAdapter, unsafeFixture } from "../../test/adapter.ts";
+import { stripSgr } from "../../test/sgr.ts";
 import uiMoto from "../index.ts";
 
-function plain(text: string): string {
-  let result = "";
+const WIDTH = 60;
 
-  for (let index = 0; index < text.length; index++) {
-    if (text.charCodeAt(index) !== 27) {
-      result += text[index];
-      continue;
-    }
+const MAX_WIDTH = 80;
 
-    index = text.indexOf("m", index);
-  }
+const BAR_SIDES = 2;
 
-  return result;
+const OTHER_MODEL_IDS = ["model-two", "model-three"];
+
+function expectedHeader(modelId: string): string[] {
+  const project = process.cwd().split("/").at(-1);
+
+  assert.ok(project !== undefined && project !== "");
+
+  const label = ` PI / ${modelId} / ${project} `;
+  const fill = WIDTH - label.length;
+
+  return [
+    "",
+    `${"─".repeat(Math.floor(fill / BAR_SIDES))}${label}${"─".repeat(Math.ceil(fill / BAR_SIDES))}`,
+    "",
+  ];
 }
 
-test("installs, updates, and removes the session header", async () => {
-  let headerFactory: Parameters<ExtensionContext["ui"]["setHeader"]>[0];
-  let renders = 0;
-  const setHeaders: Array<"factory" | "cleared"> = [];
+class HeaderHarness {
+  readonly #sdk: SdkSession;
 
-  const context = unsafeFixture<ExtensionContext>({
-    hasUI: true,
-    model: unsafeFixture<ExtensionContext["model"]>({ id: "model-one" }),
-    ui: unsafeFixture<ExtensionContext["ui"]>({
-      setHeader: (factory: typeof headerFactory) => {
-        headerFactory = factory;
-        setHeaders.push(factory ? "factory" : "cleared");
-      },
-    }),
-  });
+  readonly #provider: FauxProviderHandle;
 
-  const adapter = extensionTestAdapter();
-  uiMoto(adapter.api);
+  readonly #tui = new CountingTui();
 
-  await adapter.emit("session_start", { type: "session_start", reason: "startup" }, context);
-  assert.equal(setHeaders.at(-1), "factory");
-  assert.ok(headerFactory);
-
-  const component = headerFactory(
-    unsafeFixture<TUI>({
-      requestRender: () => {
-        renders++;
-      },
-    }),
-    unsafeFixture<ExtensionContext["ui"]["theme"]>({}),
-  );
-
-  const project = process.cwd().split("/").at(-1);
-  assert.ok(project !== undefined && project !== "");
-  const label = ` PI / model-one / ${project} `;
-  const fill = 60 - label.length;
-  assert.deepEqual(component.render(60).map(plain), [
-    "",
-    `${"─".repeat(Math.floor(fill / 2))}${label}${"─".repeat(Math.ceil(fill / 2))}`,
-    "",
-  ]);
-
-  await adapter.emit(
-    "model_select",
-    unsafeFixture({
-      type: "model_select",
-      model: unsafeFixture<NonNullable<ExtensionContext["model"]>>({
-        id: "model-two",
-      }),
-      previousModel: unsafeFixture<NonNullable<ExtensionContext["model"]>>({
-        id: "model-one",
-      }),
-      source: "cycle",
-    }),
-    context,
-  );
-  assert.equal(renders, 1);
-  assert.match(plain(component.render(60)[1] ?? ""), / PI \/ model-two \/ /);
-
-  await adapter.emit("session_shutdown", { type: "session_shutdown", reason: "quit" }, context);
-  assert.equal(setHeaders.at(-1), "cleared");
-  await adapter.emit(
-    "model_select",
-    unsafeFixture({
-      type: "model_select",
-      model: unsafeFixture<NonNullable<ExtensionContext["model"]>>({
-        id: "model-three",
-      }),
-      previousModel: unsafeFixture<NonNullable<ExtensionContext["model"]>>({
-        id: "model-two",
-      }),
-      source: "set",
-    }),
-    context,
-  );
-  assert.equal(renders, 1);
-});
-
-test("header preserves graphemes within terminal column limits", async () => {
-  let factory: Parameters<ExtensionContext["ui"]["setHeader"]>[0];
-
-  const context = unsafeFixture<ExtensionContext>({
-    mode: "tui",
-    hasUI: true,
-    model: unsafeFixture<NonNullable<ExtensionContext["model"]>>({
-      id: "项目👩‍💻é",
-    }),
-    ui: unsafeFixture<ExtensionContext["ui"]>({
-      setHeader: (value: typeof factory) => {
-        factory = value;
-      },
-    }),
-  });
-
-  const adapter = extensionTestAdapter();
-  uiMoto(adapter.api);
-  await adapter.emit("session_start", { type: "session_start", reason: "startup" }, context);
-  assert.ok(factory);
-
-  const header = factory(unsafeFixture<TUI>({ requestRender() {} }), unsafeFixture({}));
-
-  for (let width = 0; width <= 80; width++) {
-    for (const line of header.render(width))
-      assert.ok(visibleWidth(line) <= width, `width ${width}: ${plain(line)}`);
+  private constructor(sdk: SdkSession, provider: FauxProviderHandle) {
+    this.#sdk = sdk;
+    this.#provider = provider;
   }
 
-  assert.match(header.render(80)[1] ?? "", /👩‍💻/);
-  assert.match(header.render(80)[1] ?? "", /é/);
+  public get installed(): boolean {
+    return this.#sdk.ui.header !== undefined;
+  }
+
+  public get renders(): number {
+    return this.#tui.renders;
+  }
+
+  public static async start(context: TestContext, modelId: string): Promise<HeaderHarness> {
+    const provider = fauxProvider({
+      models: [modelId, ...OTHER_MODEL_IDS].map((id) => ({ id })),
+    });
+
+    const sdk = await SdkSession.create({ extensions: [uiMoto], providers: [provider] });
+
+    context.after(() => {
+      assert.deepEqual(sdk.errors, []);
+      sdk.dispose();
+    });
+
+    return new HeaderHarness(sdk, provider);
+  }
+
+  public header(): Component {
+    const factory = this.#sdk.ui.header;
+
+    assert.ok(factory, "the extension did not install a header");
+
+    return factory(this.#tui, this.#sdk.ui.theme);
+  }
+
+  public async shutdown(): Promise<void> {
+    await this.#sdk.runner.emit({ reason: "quit", type: "session_shutdown" });
+  }
+
+  public async selectModel(modelId: string): Promise<void> {
+    const model = this.#provider.getModel(modelId);
+
+    assert.ok(model, `no faux model ${modelId}`);
+    await this.#sdk.session.setModel(model);
+  }
+}
+
+test("installs the session header for the current model", async (context) => {
+  const harness = await HeaderHarness.start(context, "model-one");
+
+  assert.ok(harness.installed);
+  assert.deepEqual(
+    harness
+      .header()
+      .render(WIDTH)
+      .map((line) => stripSgr(line)),
+    expectedHeader("model-one"),
+  );
+});
+
+test("updates the header on model changes and removes it on shutdown", async (context) => {
+  const harness = await HeaderHarness.start(context, "model-one");
+  const component = harness.header();
+
+  await harness.selectModel("model-two");
+  assert.equal(harness.renders, 1);
+  assert.match(stripSgr(component.render(WIDTH)[1] ?? ""), / PI \/ model-two \//u);
+  await harness.shutdown();
+  assert.equal(harness.installed, false);
+  await harness.selectModel("model-three");
+  assert.equal(harness.renders, 1);
+});
+
+test("header preserves graphemes within terminal column limits", async (context) => {
+  const harness = await HeaderHarness.start(context, "项目👩‍💻é");
+  const header = harness.header();
+
+  for (let width = 0; width <= MAX_WIDTH; width += 1) {
+    for (const line of header.render(width)) {
+      assert.ok(visibleWidth(line) <= width, `width ${width}: ${stripSgr(line)}`);
+    }
+  }
+
+  const widest = header.render(MAX_WIDTH)[1] ?? "";
+
+  assert.match(widest, /👩‍💻/u);
+  assert.match(widest, /é/u);
 });

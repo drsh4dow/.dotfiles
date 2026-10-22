@@ -1,18 +1,15 @@
-import assert from "node:assert/strict";
-import test from "node:test";
-import type {
-  ExtensionAPI,
-  ExtensionToolContext,
-  ToolDefinition,
-} from "@earendil-works/pi-coding-agent";
 import { Clock, Effect } from "effect";
 import {
-  earlyoomKillSince,
   SACRIFICE_COMMAND_PREFIX,
+  earlyoomKillSince,
   sacrificeKillNote,
   tagCommand,
 } from "../../../lib/sacrifice.ts";
-import { unsafeFixture } from "../../test/adapter.ts";
+import test, { type TestContext } from "node:test";
+import { SdkSession } from "../../test/sdk-session.ts";
+import type { ToolDefinition } from "@earendil-works/pi-coding-agent";
+import assert from "node:assert/strict";
+import { fauxProvider } from "@earendil-works/pi-ai";
 import sacrificePreference from "../index.ts";
 
 const { execFileSync } = process.getBuiltinModule("node:child_process");
@@ -25,35 +22,33 @@ const { join } = process.getBuiltinModule("node:path");
 
 const linux = process.platform === "linux";
 
-const now = () => Effect.runSync(Clock.currentTimeMillis);
+const EXECUTABLE_MODE = 0o755;
 
-const fakeContext = (cwd: string) =>
-  unsafeFixture<ExtensionToolContext>({
-    cwd,
-    isProjectTrusted: () => false,
-    sessionManager: unsafeFixture<ExtensionToolContext["sessionManager"]>({
-      getSessionId: () => "test-session",
-      getSessionFile: () => undefined,
-    }),
-  });
+interface FakeJournal {
+  readonly restore: () => void;
+}
+
+function now(): number {
+  return Effect.runSync(Clock.currentTimeMillis);
+}
 
 // Interposing a fake journalctl requires mutating the PATH that spawned
 // children inherit; Config only reads the environment.
-function fakeJournal(line: string | undefined) {
+function fakeJournal(line?: string): FakeJournal {
   const dir = mkdtempSync(join(tmpdir(), "pi-sacrifice-journal-"));
   const script = join(dir, "journalctl");
   writeFileSync(script, `#!/bin/sh\n${line === undefined ? "" : `echo '${line}'\n`}`);
-  chmodSync(script, 0o755);
+  chmodSync(script, EXECUTABLE_MODE);
   // @effect-diagnostics-next-line processEnv:off
   const previousPath = process.env.PATH;
   // @effect-diagnostics-next-line processEnv:off
   process.env.PATH = `${dir}:${previousPath ?? ""}`;
 
   return {
-    restore: () => {
+    restore: (): void => {
       // @effect-diagnostics-next-line processEnv:off
       process.env.PATH = previousPath;
-      rmSync(dir, { recursive: true, force: true });
+      rmSync(dir, { force: true, recursive: true });
     },
   };
 }
@@ -85,7 +80,7 @@ test("earlyoomKillSince reads journal evidence", { skip: !linux }, () => {
     withKill.restore();
   }
 
-  const withoutKill = fakeJournal(undefined);
+  const withoutKill = fakeJournal();
 
   try {
     assert.equal(earlyoomKillSince(now()), false);
@@ -99,10 +94,10 @@ test("sacrificeKillNote requires a signal-like death", { skip: !linux }, () => {
 
   try {
     const since = now();
-    assert.match(sacrificeKillNote({ exitCode: 137, signal: undefined }, since) ?? "", /earlyoom/);
+    assert.match(sacrificeKillNote({ exitCode: 137, signal: undefined }, since) ?? "", /earlyoom/u);
     assert.match(
       sacrificeKillNote({ exitCode: undefined, signal: "SIGKILL" }, since) ?? "",
-      /earlyoom/,
+      /earlyoom/u,
     );
     assert.equal(sacrificeKillNote({ exitCode: 7, signal: undefined }, since), undefined);
   } finally {
@@ -110,93 +105,70 @@ test("sacrificeKillNote requires a signal-like death", { skip: !linux }, () => {
   }
 });
 
-function registeredBash() {
-  let captured: Pick<ToolDefinition, "name" | "execute"> | undefined;
-  sacrificePreference(
-    unsafeFixture<ExtensionAPI>({
-      registerTool: (tool) => {
-        captured = tool;
-      },
-    }),
-  );
-  assert.ok(captured, "extension registered no tool");
-  assert.equal(captured.name, "bash");
+async function startBash(context: TestContext): Promise<SdkSession> {
+  const sdk = await SdkSession.create({
+    extensions: [sacrificePreference],
+    providers: [fauxProvider()],
+  });
 
-  return captured;
+  context.after(() => {
+    assert.deepEqual(sdk.errors, []);
+    sdk.dispose();
+  });
+
+  return sdk;
 }
 
-test("override runs tagged commands transparently", { skip: !linux }, () => {
-  const tool = registeredBash();
+async function runBash(sdk: SdkSession, command: string): ReturnType<ToolDefinition["execute"]> {
+  const tool = sdk.runner.getToolDefinition("bash");
+  const toolCallId = "bash-call";
+  const { signal } = new AbortController();
 
-  return tool
-    .execute(
-      "t1",
-      { command: "cat /proc/self/oom_score_adj" },
-      undefined,
-      undefined,
-      fakeContext(tmpdir()),
-    )
-    .then((result) => {
-      const text = result.content.map((part) => (part.type === "text" ? part.text : "")).join("");
+  assert.ok(tool, "the extension registered no bash tool");
 
-      assert.equal(text.trim(), "500");
-      assert.partialDeepStrictEqual(result.structuredContent, {
-        output: "500\n",
-        exit_code: 0,
-      });
-    });
+  return tool.execute(
+    toolCallId,
+    { command },
+    signal,
+    undefined,
+    sdk.runner.createToolContext(toolCallId, signal),
+  );
+}
+
+test("override runs tagged commands transparently", { skip: !linux }, async (context) => {
+  const result = await runBash(await startBash(context), "cat /proc/self/oom_score_adj");
+  const text = result.content.map((part) => (part.type === "text" ? part.text : "")).join("");
+
+  assert.equal(text.trim(), "500");
+  assert.partialDeepStrictEqual(result.structuredContent, { exit_code: 0, output: "500\n" });
 });
 
-test(
-  "override passes ordinary failures through unchanged",
-  {
-    skip: !linux,
-  },
-  () => {
-    const tool = registeredBash();
+test("override passes ordinary failures through unchanged", { skip: !linux }, async (context) => {
+  const result = await runBash(await startBash(context), "exit 7");
 
-    return tool
-      .execute("t2", { command: "exit 7" }, undefined, undefined, fakeContext(tmpdir()))
-      .then((result) => {
-        assert.equal(result.isError, true);
-        assert.deepEqual(result.content, [
-          { type: "text", text: "(no output)\n\nCommand exited with code 7" },
-        ]);
-        assert.partialDeepStrictEqual(result.structuredContent, {
-          output: "",
-          exit_code: 7,
-        });
-      });
-  },
-);
+  assert.equal(result.isError, true);
+  assert.deepEqual(result.content, [
+    { text: "(no output)\n\nCommand exited with code 7", type: "text" },
+  ]);
+  assert.partialDeepStrictEqual(result.structuredContent, { exit_code: 7, output: "" });
+});
 
-test("override annotates a journal-confirmed kill", { skip: !linux }, () => {
+test("override annotates a journal-confirmed kill", { skip: !linux }, async (context) => {
+  const sdk = await startBash(context);
   const journal = fakeJournal(KILL_LINE);
-  const tool = registeredBash();
+
+  context.after(() => {
+    journal.restore();
+  });
 
   // The trailing exit keeps the tool shell alive past its killed child so the
   // SDK sees exit 137 instead of the shell's own signal death.
-  return tool
-    .execute(
-      "t3",
-      { command: "sh -c 'kill -KILL $$'; code=$?; exit $code" },
-      undefined,
-      undefined,
-      fakeContext(tmpdir()),
-    )
-    .then((result) => {
-      assert.equal(result.isError, true);
+  const result = await runBash(sdk, "sh -c 'kill -KILL $$'; code=$?; exit $code");
+  const text = result.content.map((part) => (part.type === "text" ? part.text : "")).join("");
 
-      const text = result.content.map((part) => (part.type === "text" ? part.text : "")).join("");
-
-      assert.match(text, /Command exited with code 137/);
-      assert.match(text, /earlyoom/);
-      assert.partialDeepStrictEqual(result.structuredContent, {
-        exit_code: 137,
-      });
-      assert.match(JSON.stringify(result.structuredContent), /earlyoom/);
-    })
-    .finally(() => {
-      journal.restore();
-    });
+  assert.equal(result.isError, true);
+  assert.match(text, /Command exited with code 137/u);
+  assert.match(text, /earlyoom/u);
+  assert.partialDeepStrictEqual(result.structuredContent, { exit_code: 137 });
+  assert.match(JSON.stringify(result.structuredContent), /earlyoom/u);
 });

@@ -15,12 +15,24 @@ export function tagCommand(command: string): string {
   return LINUX ? `${SACRIFICE_COMMAND_PREFIX}\n${command}` : command;
 }
 
-const JOURNAL_TIMEOUT_MS = 1_500;
+const JOURNAL_TIMEOUT_MS = 1500;
 
+// oxlint-disable-next-line no-magic-numbers -- Byte sizes read clearest as a KiB product.
 const JOURNAL_MAX_BYTES = 256 * 1024;
 
+const MS_PER_SECOND = 1000;
+
+// Shells report a child killed by signal N as exit status 128 + N.
+const EXIT_SIGKILL = 137;
+
+const EXIT_SIGTERM = 143;
+
+type ProcessDeath = Readonly<{ exitCode: number | undefined; signal: string | undefined }>;
+
 export function earlyoomKillSince(sinceEpochMs: number): boolean {
-  if (!LINUX) return false;
+  if (!LINUX) {
+    return false;
+  }
 
   try {
     const log = execFileSync(
@@ -29,21 +41,21 @@ export function earlyoomKillSince(sinceEpochMs: number): boolean {
         "-u",
         "earlyoom",
         "--since",
-        `@${Math.floor(sinceEpochMs / 1000)}`,
+        `@${Math.floor(sinceEpochMs / MS_PER_SECOND)}`,
         "-o",
         "cat",
         "--no-pager",
         "-q",
       ],
       {
-        timeout: JOURNAL_TIMEOUT_MS,
-        maxBuffer: JOURNAL_MAX_BYTES,
         encoding: "utf8",
+        maxBuffer: JOURNAL_MAX_BYTES,
         stdio: ["ignore", "pipe", "ignore"],
+        timeout: JOURNAL_TIMEOUT_MS,
       },
     );
 
-    return /sending SIG(TERM|KILL) to process/.test(log);
+    return /sending SIG(?:TERM|KILL) to process/u.test(log);
   } catch {
     return false;
   }
@@ -51,17 +63,16 @@ export function earlyoomKillSince(sinceEpochMs: number): boolean {
 
 // Post-mortem pid correlation is impossible (the process tree is gone), so a
 // journal-confirmed kill inside the window yields a "likely" diagnosis, not a fact.
-export function sacrificeKillNote(
-  death: { exitCode: number | undefined; signal: string | undefined },
-  sinceEpochMs: number,
-): string | undefined {
+export function sacrificeKillNote(death: ProcessDeath, sinceEpochMs: number): string | undefined {
   const signalish =
     death.signal === "SIGTERM" ||
     death.signal === "SIGKILL" ||
-    death.exitCode === 137 ||
-    death.exitCode === 143;
+    death.exitCode === EXIT_SIGKILL ||
+    death.exitCode === EXIT_SIGTERM;
 
-  if (!signalish || !earlyoomKillSince(sinceEpochMs)) return undefined;
+  if (!signalish || !earlyoomKillSince(sinceEpochMs)) {
+    return undefined;
+  }
 
   return "likely killed by earlyoom under system memory pressure; pi-spawned work dies before the session";
 }

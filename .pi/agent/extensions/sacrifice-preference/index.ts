@@ -1,59 +1,74 @@
-import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import {
-  createBashToolDefinition,
-  createLocalBashOperations,
-  getAgentDir,
-  SettingsManager,
+import type {
+  BashOperations,
+  BashToolOptions,
+  ExtensionAPI,
+  ExtensionContext,
 } from "@earendil-works/pi-coding-agent";
 import { Clock, Effect } from "effect";
 import { SACRIFICE_COMMAND_PREFIX, sacrificeKillNote } from "../../lib/sacrifice.ts";
+import {
+  SettingsManager,
+  createBashToolDefinition,
+  createLocalBashOperations,
+  getAgentDir,
+} from "@earendil-works/pi-coding-agent";
 
-// Replaces the built-in bash tool with an identically surfaced one whose commands
-// carry the Sacrifice Preference tag, so earlyoom kills the command's processes
-// instead of the session. The agent sees a difference only when a kill triggers.
-export default function sacrificePreference(pi: ExtensionAPI) {
-  if (process.platform !== "linux") return;
-  const template = createBashToolDefinition(process.cwd());
+function bashOptions(ctx: ExtensionContext): BashToolOptions {
+  const settings = SettingsManager.create(ctx.cwd, getAgentDir(), {
+    projectTrusted: ctx.isProjectTrusted(),
+  });
+
+  const userPrefix = settings.getShellCommandPrefix();
+  const shellPath = settings.getShellPath();
+
+  return {
+    commandPrefix:
+      userPrefix === undefined || userPrefix === ""
+        ? SACRIFICE_COMMAND_PREFIX
+        : `${SACRIFICE_COMMAND_PREFIX}\n${userPrefix}`,
+    ...(shellPath !== undefined && shellPath !== "" && { shellPath }),
+  };
+}
+
+type ToolOutput = Readonly<Pick<Parameters<BashOperations["exec"]>[2], "onData">>;
+
+function appendToToolOutput(output: ToolOutput, text: string): void {
+  output.onData(Buffer.from(`\n${text}\n`));
+}
+
+function annotateKills(operations: BashOperations, startedAt: number): BashOperations {
+  return {
+    exec: async (command, cwd, execution) =>
+      operations.exec(command, cwd, execution).then((result) => {
+        const note = sacrificeKillNote(
+          { exitCode: result.exitCode ?? undefined, signal: undefined },
+          startedAt,
+        );
+
+        if (note !== undefined) {
+          appendToToolOutput(execution, note);
+        }
+
+        return result;
+      }),
+  };
+}
+
+export default function sacrificePreference(pi: ExtensionAPI): void {
+  if (process.platform !== "linux") {
+    return;
+  }
+
   pi.registerTool({
-    ...template,
-    execute(toolCallId, params, signal, onUpdate, ctx) {
+    ...createBashToolDefinition(process.cwd()),
+    // oxlint-disable-next-line max-params -- The SDK fixes ToolDefinition.execute at five positional parameters.
+    async execute(toolCallId, params, signal, onUpdate, ctx) {
       const startedAt = Effect.runSync(Clock.currentTimeMillis);
-
-      const settings = SettingsManager.create(ctx.cwd, getAgentDir(), {
-        projectTrusted: ctx.isProjectTrusted(),
-      });
-
-      const userPrefix = settings.getShellCommandPrefix();
-      const shellPath = settings.getShellPath();
-
-      const options: NonNullable<Parameters<typeof createBashToolDefinition>[1]> = {
-        commandPrefix:
-          userPrefix === undefined || userPrefix === ""
-            ? SACRIFICE_COMMAND_PREFIX
-            : `${SACRIFICE_COMMAND_PREFIX}\n${userPrefix}`,
-      };
-
-      if (shellPath !== undefined && shellPath !== "") options.shellPath = shellPath;
-
-      const operations = createLocalBashOperations(options);
+      const options = bashOptions(ctx);
 
       const tool = createBashToolDefinition(ctx.cwd, {
         ...options,
-        operations: {
-          exec: (command, cwd, execution) =>
-            operations.exec(command, cwd, execution).then((result) => {
-              const note = sacrificeKillNote(
-                { exitCode: result.exitCode ?? undefined, signal: undefined },
-                startedAt,
-              );
-
-              // Native output handling carries the diagnosis to both direct
-              // tool results and codemode's structured output.
-              if (note !== undefined) execution.onData(Buffer.from(`\n${note}\n`));
-
-              return result;
-            }),
-        },
+        operations: annotateKills(createLocalBashOperations(options), startedAt),
       });
 
       return tool.execute(toolCallId, params, signal, onUpdate, ctx);
