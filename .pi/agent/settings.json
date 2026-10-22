@@ -1,0 +1,63 @@
+{
+  "fastMode": {
+    "enabled": false,
+    "providers": {
+      "anthropic": {
+        "request": {
+          "speed": "fast",
+          "betas": [
+            "fast-mode-2026-02-01"
+          ]
+        },
+        "models": [
+          "claude-opus-5-5"
+        ],
+        "subagentsEnabled": false
+      }
+    }
+  },
+  "$schema": "https://pi.dev/schemas/settings.schema.json",
+  "lastChangelogVersion": "1.4.0",
+  "packages": [
+    "../../Projects/3yhealth/.pi"
+  ],
+  "defaultProvider": "anthropic",
+  "defaultModel": "claude-opus-5-5",
+  "enabledModels": [
+    "opencode-go/glm-5.3-flash",
+    "anthropic/claude-opus-5-5",
+    "openai/gpt-6.1-sol",
+    "openai/gpt-6-astra",
+    "anthropic/claude-fable-5-1"
+  ],
+  "defaultThinkingLevel": "high",
+  "compaction": {
+    "modelOverrides": {
+      "anthropic/claude-opus-5-5": {
+        "reserveTokens": 700000
+      }
+    }
+  },
+  "defaultTools": [
+    "+codemode"
+  ],
+  "codemode": {
+    "mode": "on"
+  },
+  "hideThinkingBlock": false,
+  "treeFilterMode": "default",
+  "theme": "catppuccin-mocha",
+  "terminal": {
+    "showTerminalProgress": false
+  },
+  "warnings": {
+    "anthropicExtraUsage": false
+  },
+  "tuiMode": "fullscreen",
+  "showCacheMissNotices": true,
+  "cacheWarming": "streaming",
+  "markdown": {
+    "mermaid": "streaming"
+  },
+  "deviceId": "56db2cc9-59f0-4dbf-b318-126c9049b11c"
+}
