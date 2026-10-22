@@ -13,6 +13,7 @@ Quick reference for WCAG 2.1 AA compliance. Use alongside the `frontend-ui-engin
 ## Essential Checks
 
 ### Keyboard Navigation
+
 - [ ] All interactive elements focusable via Tab key
 - [ ] Focus order follows visual/logical order
 - [ ] Focus is visible (outline/ring on focused elements)
@@ -22,6 +23,7 @@ Quick reference for WCAG 2.1 AA compliance. Use alongside the `frontend-ui-engin
 - [ ] Modals trap focus while open, return focus on close
 
 ### Screen Readers
+
 - [ ] All images have `alt` text (or `alt=""` for decorative images)
 - [ ] All form inputs have associated labels (`<label>` or `aria-label`)
 - [ ] Buttons and links have descriptive text (not "Click here")
@@ -31,6 +33,7 @@ Quick reference for WCAG 2.1 AA compliance. Use alongside the `frontend-ui-engin
 - [ ] Tables have `<th>` headers with scope
 
 ### Visual
+
 - [ ] Text contrast ≥ 4.5:1 (normal text) or ≥ 3:1 (large text, 18px+)
 - [ ] UI components contrast ≥ 3:1 against background
 - [ ] Color is not the only way to convey information
@@ -38,6 +41,7 @@ Quick reference for WCAG 2.1 AA compliance. Use alongside the `frontend-ui-engin
 - [ ] No content that flashes more than 3 times per second
 
 ### Forms
+
 - [ ] Every input has a visible label
 - [ ] Required fields indicated (not by color alone)
 - [ ] Error messages specific and associated with the field
@@ -46,6 +50,7 @@ Quick reference for WCAG 2.1 AA compliance. Use alongside the `frontend-ui-engin
 - [ ] Known fields use autocomplete (for example `type="email" autocomplete="email"`)
 
 ### Content
+
 - [ ] Language declared (`<html lang="en">`)
 - [ ] Page has a descriptive `<title>`
 - [ ] Links distinguish from surrounding text (not by color alone)
@@ -58,13 +63,14 @@ Quick reference for WCAG 2.1 AA compliance. Use alongside the `frontend-ui-engin
 
 ```html
 <!-- Use <button> for actions -->
-<button onClick={handleDelete}>Delete Task</button>
+<button onClick="{handleDelete}">Delete Task</button>
 
 <!-- Use <a> for navigation -->
 <a href="/tasks/123">View Task</a>
 
 <!-- NEVER use div/span as buttons -->
-<div onClick={handleDelete}>Delete</div>  <!-- BAD -->
+<div onClick="{handleDelete}">Delete</div>
+<!-- BAD -->
 ```
 
 ### Form Labels
@@ -139,22 +145,22 @@ npx pa11y             # CLI accessibility checker
 
 ## Quick Reference: ARIA Live Regions
 
-| Value | Behavior | Use For |
-|-------|----------|---------|
-| `aria-live="polite"` | Announced at next pause | Status updates, saved confirmations |
-| `aria-live="assertive"` | Announced immediately | Errors, time-sensitive alerts |
-| `role="status"` | Same as `polite` | Status messages |
-| `role="alert"` | Same as `assertive` | Error messages |
+| Value                   | Behavior                | Use For                             |
+| ----------------------- | ----------------------- | ----------------------------------- |
+| `aria-live="polite"`    | Announced at next pause | Status updates, saved confirmations |
+| `aria-live="assertive"` | Announced immediately   | Errors, time-sensitive alerts       |
+| `role="status"`         | Same as `polite`        | Status messages                     |
+| `role="alert"`          | Same as `assertive`     | Error messages                      |
 
 ## Common Anti-Patterns
 
-| Anti-Pattern | Problem | Fix |
-|---|---|---|
-| `div` as button | Not focusable, no keyboard support | Use `<button>` |
-| Missing `alt` text | Images invisible to screen readers | Add descriptive `alt` |
-| Color-only states | Invisible to color-blind users | Add icons, text, or patterns |
-| Autoplaying media | Disorienting, can't be stopped | Add controls, don't autoplay |
-| Custom dropdown with no ARIA | Unusable by keyboard/screen reader | Use native `<select>` or proper ARIA listbox |
-| Removing focus outlines | Users can't see where they are | Style outlines, don't remove them |
-| Empty links/buttons | "Link" announced with no description | Add text or `aria-label` |
-| `tabindex > 0` | Breaks natural tab order | Use `tabindex="0"` or `-1` only |
+| Anti-Pattern                 | Problem                              | Fix                                          |
+| ---------------------------- | ------------------------------------ | -------------------------------------------- |
+| `div` as button              | Not focusable, no keyboard support   | Use `<button>`                               |
+| Missing `alt` text           | Images invisible to screen readers   | Add descriptive `alt`                        |
+| Color-only states            | Invisible to color-blind users       | Add icons, text, or patterns                 |
+| Autoplaying media            | Disorienting, can't be stopped       | Add controls, don't autoplay                 |
+| Custom dropdown with no ARIA | Unusable by keyboard/screen reader   | Use native `<select>` or proper ARIA listbox |
+| Removing focus outlines      | Users can't see where they are       | Style outlines, don't remove them            |
+| Empty links/buttons          | "Link" announced with no description | Add text or `aria-label`                     |
+| `tabindex > 0`               | Breaks natural tab order             | Use `tabindex="0"` or `-1` only              |
