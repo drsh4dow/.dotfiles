@@ -18,7 +18,7 @@ export const DEFAULT_SHORTCUT = "ctrl+alt+m";
 
 export const RESERVED_SHORTCUTS = new Set(["ctrl+m", "enter", "return"]);
 
-// The subagents skill launches every subagent with `--name "subagent: <short assignment>"`.
+// Sessions launched with `--name "subagent: <short assignment>"` count as subagent sessions.
 export const SUBAGENT_SESSION_PREFIX = "subagent:";
 
 const Keybindings = Schema.fromJsonString(

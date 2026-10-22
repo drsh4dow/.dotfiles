@@ -18,9 +18,6 @@
   },
   "$schema": "https://pi.dev/schemas/settings.schema.json",
   "lastChangelogVersion": "1.4.0",
-  "packages": [
-    "../../Projects/3yhealth/.pi"
-  ],
   "defaultProvider": "anthropic",
   "defaultModel": "claude-opus-5-5",
   "enabledModels": [

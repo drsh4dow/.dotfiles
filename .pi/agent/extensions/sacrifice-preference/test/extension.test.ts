@@ -12,10 +12,6 @@ import {
   sacrificeKillNote,
   tagCommand,
 } from "../../../lib/sacrifice.ts";
-import {
-  BackgroundTerminalManager,
-  terminalResultFields,
-} from "../../background-terminals/manager.ts";
 import { unsafeFixture } from "../../test/adapter.ts";
 import sacrificePreference from "../index.ts";
 
@@ -202,43 +198,3 @@ test("override annotates a journal-confirmed kill", { skip: !linux }, () => {
     })
     .finally(() => journal.restore());
 });
-
-test("manager annotates a journal-confirmed kill", { skip: !linux }, () =>
-  Effect.runPromise(
-    Effect.gen(function* () {
-      const journal = fakeJournal(KILL_LINE);
-      const cwd = mkdtempSync(join(tmpdir(), "pi-sacrifice-bg-"));
-
-      try {
-        const manager = new BackgroundTerminalManager();
-
-        const started = manager.start({
-          command: "sh -c 'kill -KILL $$'; code=$?; exit $code",
-          title: "hog",
-          cwd,
-        });
-
-        const deadline = now() + 6_000;
-
-        while (now() < deadline) {
-          const snapshot = manager.get(started.id);
-
-          if (snapshot && snapshot.state !== "running") {
-            assert.equal(snapshot.state, "failed");
-            assert.match(terminalResultFields(snapshot).error ?? "", /earlyoom/);
-            assert.equal(snapshot.command, started.command);
-
-            return;
-          }
-
-          yield* Effect.sleep(20);
-        }
-
-        throw new Error("terminal did not settle");
-      } finally {
-        journal.restore();
-        rmSync(cwd, { recursive: true, force: true });
-      }
-    }),
-  ),
-);

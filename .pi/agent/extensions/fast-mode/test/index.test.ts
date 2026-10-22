@@ -52,21 +52,6 @@ describe("fast mode config", () => {
     );
   });
 
-  // Renaming the prefix in the skill alone would silently restore fast mode in subagents.
-  test("the subagents skill names sessions with the subagent prefix", () => {
-    const { readFileSync } = process.getBuiltinModule("node:fs");
-
-    const skill = readFileSync(
-      new URL("../../../skills/subagents/SKILL.md", import.meta.url),
-      "utf8",
-    );
-
-    const names = [...skill.matchAll(/--name "([^"]*)"/g)].map(([, name]) => name);
-    assert.ok(names.length > 0, "the subagents skill has no --name in its launch command");
-
-    for (const name of names) assert.ok(name.startsWith(SUBAGENT_SESSION_PREFIX), name);
-  });
-
   test("ignores missing or invalid configs", () => {
     for (const settings of [
       unsafeFixture<PiSettings>({}),

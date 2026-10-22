@@ -177,8 +177,6 @@ const startPi = Effect.fn("startPi")(function* () {
 
   const environment = {
     PI_SKIP_VERSION_CHECK: "1",
-    // Fixture sessions must not report state to the parent's Herdr pane.
-    HERDR_ENV: "0",
     PI_CODING_AGENT_DIR: agentDir,
   };
 
