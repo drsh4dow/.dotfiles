@@ -10,6 +10,6 @@ src="$(cd "$(dirname "$0")" && pwd)"
 
 mkdir -p ~/.pi/agent
 ln -sfn "$src/node_modules" ~/.pi/node_modules
-for f in settings.json keybindings.json SYSTEM.md themes extensions lib; do
+for f in settings.json keybindings.json mcp.json SYSTEM.md themes extensions lib; do
   ln -sfn "$src/agent/$f" ~/.pi/agent/$f
 done
