@@ -92,7 +92,7 @@ function listingProvider(
   if (!config || !Object.hasOwn(config.providers, model.provider)) return undefined;
   const provider = config.providers[model.provider];
 
-  return provider.models.includes(model.id) ? provider : undefined;
+  return provider?.models.includes(model.id) ? provider : undefined;
 }
 
 function disabledForSubagents(provider: ProviderConfig, sessionName: string | undefined): boolean {
@@ -303,9 +303,9 @@ export default function fastModeExtension(
       }).pipe(
         (transition) => toggles.withPermit(transition),
         Effect.catchTag("SettingsSaveError", (error) =>
-          Effect.sync(() =>
-            ctx.ui.notify(`Could not save Fast mode setting: ${error.message}`, "error"),
-          ),
+          Effect.sync(() => {
+            ctx.ui.notify(`Could not save Fast mode setting: ${error.message}`, "error");
+          }),
         ),
         Effect.provide(BunFileSystem.layer),
       ),
@@ -325,8 +325,12 @@ export default function fastModeExtension(
     showIndicator(ctx, currentConfig, sessionName(), enabled);
   });
   // Pi updates ctx.model before emitting model_select.
-  pi.on("model_select", (_event, ctx) => showIndicator(ctx, config(), sessionName(), enabled));
-  pi.on("session_info_changed", (event, ctx) => showIndicator(ctx, config(), event.name, enabled));
+  pi.on("model_select", (_event, ctx) => {
+    showIndicator(ctx, config(), sessionName(), enabled);
+  });
+  pi.on("session_info_changed", (event, ctx) => {
+    showIndicator(ctx, config(), event.name, enabled);
+  });
   pi.on("before_provider_request", (event, ctx) =>
     enabled ? withFastRequest(config(), ctx.model, sessionName(), event.payload) : undefined,
   );

@@ -27,12 +27,13 @@ export default function sacrificePreference(pi: ExtensionAPI) {
       const shellPath = settings.getShellPath();
 
       const options: NonNullable<Parameters<typeof createBashToolDefinition>[1]> = {
-        commandPrefix: userPrefix
-          ? `${SACRIFICE_COMMAND_PREFIX}\n${userPrefix}`
-          : SACRIFICE_COMMAND_PREFIX,
+        commandPrefix:
+          userPrefix === undefined || userPrefix === ""
+            ? SACRIFICE_COMMAND_PREFIX
+            : `${SACRIFICE_COMMAND_PREFIX}\n${userPrefix}`,
       };
 
-      if (shellPath) options.shellPath = shellPath;
+      if (shellPath !== undefined && shellPath !== "") options.shellPath = shellPath;
 
       const operations = createLocalBashOperations(options);
 
@@ -48,7 +49,7 @@ export default function sacrificePreference(pi: ExtensionAPI) {
 
               // Native output handling carries the diagnosis to both direct
               // tool results and codemode's structured output.
-              if (note) execution.onData(Buffer.from(`\n${note}\n`));
+              if (note !== undefined) execution.onData(Buffer.from(`\n${note}\n`));
 
               return result;
             }),

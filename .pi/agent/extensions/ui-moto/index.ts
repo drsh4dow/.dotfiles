@@ -86,11 +86,15 @@ export default function (pi: ExtensionAPI) {
 
   function installHeader(ctx: ExtensionContext): void {
     ctx.ui.setHeader((tui) => {
-      requestRender = () => tui.requestRender();
+      requestRender = () => {
+        tui.requestRender();
+      };
 
       return {
         render: (width: number) => renderHeader(width, currentModelId),
-        invalidate: () => tui.requestRender(),
+        invalidate: () => {
+          tui.requestRender();
+        },
       };
     });
   }

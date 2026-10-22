@@ -4,12 +4,13 @@ import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 // record prompt changes without replacing the cached conversation prefix.
 export default function promptContextExtension(pi: ExtensionAPI): void {
   pi.on("before_agent_start", ({ systemPromptOptions: options }) => {
-    if (!options.customPrompt) return;
+    // Pi treats an empty custom prompt as absent.
+    if (options.customPrompt === undefined || options.customPrompt === "") return;
 
     const tools = options.selectedTools.flatMap((name) => {
       const snippet = options.toolSnippets[name];
 
-      return snippet ? [`- ${name}: ${snippet}`] : [];
+      return snippet === undefined || snippet === "" ? [] : [`- ${name}: ${snippet}`];
     });
 
     const guidelines = [

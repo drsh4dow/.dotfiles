@@ -44,12 +44,16 @@ test("installs, updates, and removes the session header", async () => {
   assert.ok(headerFactory);
 
   const component = headerFactory(
-    unsafeFixture<TUI>({ requestRender: () => renders++ }),
+    unsafeFixture<TUI>({
+      requestRender: () => {
+        renders++;
+      },
+    }),
     unsafeFixture<ExtensionContext["ui"]["theme"]>({}),
   );
 
   const project = process.cwd().split("/").at(-1);
-  assert.ok(project);
+  assert.ok(project !== undefined && project !== "");
   const label = ` PI / model-one / ${project} `;
   const fill = 60 - label.length;
   assert.deepEqual(component.render(60).map(plain), [

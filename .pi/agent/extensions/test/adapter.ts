@@ -10,7 +10,7 @@ type SDKEvents = {
 };
 
 type Handlers = {
-  [Name in keyof SDKEvents]?: ExtensionHandler<SDKEvents[Name], unknown>;
+  [Name in keyof SDKEvents]?: ExtensionHandler<SDKEvents[Name], unknown> | undefined;
 };
 
 export function extensionTestAdapter() {
@@ -21,7 +21,7 @@ export function extensionTestAdapter() {
       handlers[name] = handler;
 
       return () => {
-        delete handlers[name];
+        handlers[name] = undefined;
       };
     },
   };

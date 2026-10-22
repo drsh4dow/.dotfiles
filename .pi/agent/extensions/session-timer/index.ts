@@ -95,7 +95,7 @@ export default function sessionTimer(pi: ExtensionAPI): void {
     let entry = ctx.sessionManager.getLeafEntry();
 
     while (entry && entry.type !== "message") {
-      entry = entry.parentId ? ctx.sessionManager.getEntry(entry.parentId) : undefined;
+      entry = entry.parentId === null ? undefined : ctx.sessionManager.getEntry(entry.parentId);
     }
 
     if (entry?.type !== "message" || entry.message.role !== "assistant") return;
@@ -121,8 +121,12 @@ export default function sessionTimer(pi: ExtensionAPI): void {
     return new Text(theme.fg("dim", `⏱ ${formatDuration(elapsed)}`), 1, 0);
   });
 
-  pi.on("session_start", (_event, ctx) => restore(ctx));
-  pi.on("session_tree", (_event, ctx) => restore(ctx));
+  pi.on("session_start", (_event, ctx) => {
+    restore(ctx);
+  });
+  pi.on("session_tree", (_event, ctx) => {
+    restore(ctx);
+  });
 
   pi.on("message_start", ({ message }, ctx) => {
     if (message.role !== "user") return;
@@ -136,8 +140,12 @@ export default function sessionTimer(pi: ExtensionAPI): void {
     if (message.role === "toolResult") showDuration(ctx, message.timestamp);
   });
 
-  pi.on("tool_execution_start", (_event, ctx) => finishResponse(ctx));
-  pi.on("turn_end", (_event, ctx) => finishResponse(ctx));
+  pi.on("tool_execution_start", (_event, ctx) => {
+    finishResponse(ctx);
+  });
+  pi.on("turn_end", (_event, ctx) => {
+    finishResponse(ctx);
+  });
 
   pi.on("session_shutdown", (_event, ctx) => {
     origin = undefined;

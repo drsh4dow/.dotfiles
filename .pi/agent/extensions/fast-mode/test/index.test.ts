@@ -195,7 +195,9 @@ test("/fast persists, announces, and shows toggles for fast models and only maps
   const { tmpdir } = process.getBuiltinModule("node:os");
   const { join } = process.getBuiltinModule("node:path");
   const root = mkdtempSync(join(tmpdir(), "pi-fast-mode-"));
-  t.after(() => rmSync(root, { recursive: true, force: true }));
+  t.after(() => {
+    rmSync(root, { recursive: true, force: true });
+  });
   const settingsPath = join(root, "settings.json");
   writeFileSync(settingsPath, JSON.stringify({ theme: "x", fastMode: config }));
 
@@ -312,10 +314,7 @@ test("/fast persists, announces, and shows toggles for fast models and only maps
   await toggle("", ctx);
   const failure = notices.pop();
   assert.equal(failure?.[1], "error");
-  assert.match(
-    failure?.[0] ?? "",
-    /^Could not save Fast mode setting: could not lock .*settings\.json: /,
-  );
+  assert.match(failure[0], /^Could not save Fast mode setting: could not lock .*settings\.json: /);
   assert.deepEqual(notices, [
     ["Fast mode enabled (service_tier: fast).", "info"],
     ["Fast mode disabled.", "info"],

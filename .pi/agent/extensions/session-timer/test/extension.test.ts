@@ -37,7 +37,9 @@ function harness(manager: SessionManager, mode: ExtensionContext["mode"] = "tui"
       theme: unsafeFixture<ExtensionContext["ui"]["theme"]>({
         fg: (_color, text) => text,
       }),
-      setStatus: (_key, value) => statuses.push(value),
+      setStatus: (_key, value) => {
+        statuses.push(value);
+      },
     }),
   });
 
@@ -162,7 +164,9 @@ test("real turns persist one display-only footer after each text response and re
   const { tmpdir } = process.getBuiltinModule("node:os");
   const { join } = process.getBuiltinModule("node:path");
   const directory = mkdtempSync(join(tmpdir(), "pi-session-timer-"));
-  t.after(() => rmSync(directory, { recursive: true, force: true }));
+  t.after(() => {
+    rmSync(directory, { recursive: true, force: true });
+  });
 
   const settingsManager = SettingsManager.inMemory({
     defaultProjectTrust: "always",
@@ -180,7 +184,7 @@ test("real turns persist one display-only footer after each text response and re
     noContextFiles: true,
     extensionFactories: [
       sessionTimer,
-      (pi) =>
+      (pi) => {
         pi.registerTool({
           name: "probe",
           label: "Probe",
@@ -191,7 +195,8 @@ test("real turns persist one display-only footer after each text response and re
               content: [{ type: "text", text: "tool output" }],
               details: {},
             }),
-        }),
+        });
+      },
     ],
   });
 
@@ -211,7 +216,9 @@ test("real turns persist one display-only footer after each text response and re
     thinkingLevel: "off",
   });
 
-  t.after(() => session.dispose());
+  t.after(() => {
+    session.dispose();
+  });
   const errors: string[] = [];
   let status: string | undefined;
 
@@ -227,7 +234,9 @@ test("real turns persist one display-only footer after each text response and re
         status = value;
       },
     }),
-    onError: (error) => errors.push(error.error),
+    onError: (error) => {
+      errors.push(error.error);
+    },
   });
   session.modelRuntime.registerNativeProvider(provider.provider);
   session.setActiveToolsByName(["probe"]);
@@ -252,10 +261,10 @@ test("real turns persist one display-only footer after each text response and re
 
   for (const moment of moments) {
     assert.equal(moment.customType, "session-timer-moment");
-    assert.ok(moment.parentId);
+    assert.ok(moment.parentId !== null);
     const response = manager.getEntry(moment.parentId);
     assert.equal(response?.type, "message");
-    assert.ok(response?.type === "message" && response.message.role === "assistant");
+    assert.equal(response.message.role, "assistant");
     assert.equal(moment.data, Date.parse(response.timestamp) - firstUser.message.timestamp);
 
     const renderer = session.extensionRunner.getEntryRenderer(moment.customType);
@@ -293,7 +302,7 @@ test("real turns persist one display-only footer after each text response and re
   assert.deepEqual(errors, []);
 
   const file = manager.getSessionFile();
-  assert.ok(file);
+  assert.ok(file !== undefined);
   const reopened = SessionManager.open(file, directory);
   assert.deepEqual(
     reopened.getEntries().filter((entry) => entry.type === "custom"),

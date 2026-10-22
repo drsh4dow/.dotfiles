@@ -42,7 +42,7 @@ const fakeContext = (cwd: string) =>
 function fakeJournal(line: string | undefined) {
   const dir = mkdtempSync(join(tmpdir(), "pi-sacrifice-journal-"));
   const script = join(dir, "journalctl");
-  writeFileSync(script, `#!/bin/sh\n${line ? `echo '${line}'\n` : ""}`);
+  writeFileSync(script, `#!/bin/sh\n${line === undefined ? "" : `echo '${line}'\n`}`);
   chmodSync(script, 0o755);
   // @effect-diagnostics-next-line processEnv:off
   const previousPath = process.env.PATH;
@@ -196,5 +196,7 @@ test("override annotates a journal-confirmed kill", { skip: !linux }, () => {
       });
       assert.match(JSON.stringify(result.structuredContent), /earlyoom/);
     })
-    .finally(() => journal.restore());
+    .finally(() => {
+      journal.restore();
+    });
 });

@@ -26,7 +26,9 @@ const { join } = process.getBuiltinModule("path");
 for (const custom of [true, false]) {
   test(`${custom ? "custom" : "stock"} prompt preserves sections, tracks tools, and supports codemode`, async (t) => {
     const directory = mkdtempSync(join(tmpdir(), "pi-prompt-context-"));
-    t.after(() => rmSync(directory, { recursive: true, force: true }));
+    t.after(() => {
+      rmSync(directory, { recursive: true, force: true });
+    });
     const agentDir = join(directory, "agent");
     mkdirSync(join(agentDir, "skills", "sample"), { recursive: true });
     writeFileSync(join(agentDir, "AGENTS.md"), "PROJECT CONTEXT POLICY");
@@ -53,26 +55,37 @@ for (const custom of [true, false]) {
       settingsManager,
       extensionFactories: [
         (pi) => {
-          for (const [name, snippet, guidelines] of [
+          const tools: Array<{ name: string; promptSnippet?: string; promptGuidelines: string[] }> =
             [
-              "probe_write",
-              "Write an artifact",
-              [" Keep edits focused ", "", "Keep edits focused", "Write safely"],
-            ],
-            ["read", "Read an artifact", ["Keep edits focused", "Inspect evidence"]],
-            ["no_snippet", undefined, ["Unlisted tool guidance"]],
-          ] as const) {
+              {
+                name: "probe_write",
+                promptSnippet: "Write an artifact",
+                promptGuidelines: [
+                  " Keep edits focused ",
+                  "",
+                  "Keep edits focused",
+                  "Write safely",
+                ],
+              },
+              {
+                name: "read",
+                promptSnippet: "Read an artifact",
+                promptGuidelines: ["Keep edits focused", "Inspect evidence"],
+              },
+              { name: "no_snippet", promptGuidelines: ["Unlisted tool guidance"] },
+            ];
+
+          for (const tool of tools) {
             pi.registerTool({
-              name,
-              label: name,
-              description: name,
-              promptSnippet: snippet,
-              promptGuidelines: [...guidelines],
+              ...tool,
+              label: tool.name,
+              description: tool.name,
               parameters: Type.Object({}),
-              execute: async () => ({
-                content: [{ type: "text", text: "artifact contents" }],
-                details: {},
-              }),
+              execute: () =>
+                Promise.resolve({
+                  content: [{ type: "text", text: "artifact contents" }],
+                  details: {},
+                }),
             });
           }
 
@@ -106,7 +119,9 @@ for (const custom of [true, false]) {
       thinkingLevel: "off",
     });
 
-    t.after(() => session.dispose());
+    t.after(() => {
+      session.dispose();
+    });
     await session.bindExtensions({
       mode: "print",
       onError: (error) => assert.fail(error.error),
@@ -176,8 +191,6 @@ for (const custom of [true, false]) {
       (context) => {
         const result = context.messages.at(-1);
         assert.equal(result?.role, "toolResult");
-
-        if (result?.role !== "toolResult") assert.fail("Missing tool result");
         assert.equal(result.toolName, "codemode");
         assert.equal(result.isError, false);
         assert.ok(

@@ -29,9 +29,13 @@ const skip = e2eUnavailable();
 function footerModel(pane: string) {
   const matches = [...pane.matchAll(/\(([a-z0-9-]+)\)\s+(\S+)\s+•/g)];
   const last = matches.at(-1);
-  assert.ok(last, `could not read the footer model from pane:\n${pane}`);
+  const [, provider, id] = last ?? [];
+  assert.ok(
+    provider !== undefined && id !== undefined,
+    `could not read the footer model from pane:\n${pane}`,
+  );
 
-  return { provider: last[1], id: last[2] };
+  return { provider, id };
 }
 
 const savedConfig = Effect.fn("savedConfig")(function* (session: PiSession) {
