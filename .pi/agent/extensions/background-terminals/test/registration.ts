@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import type { TSchema } from "@earendil-works/pi-ai";
+import { type JsonValue, type TSchema, Type, validateToolArguments } from "@earendil-works/pi-ai";
 import type {
   ExtensionAPI,
   ExtensionContext,
@@ -9,7 +9,6 @@ import type {
   ToolDefinition,
 } from "@earendil-works/pi-coding-agent";
 import { Schema } from "effect";
-import { Check } from "typebox/value";
 import { unsafeFixture } from "../../test/adapter.ts";
 import extension, { type BackgroundTerminalOptions } from "../index.ts";
 
@@ -65,6 +64,23 @@ const decodeSettleResult = Schema.decodeUnknownSync(
     }),
   ),
 );
+
+// pi-ai's validator coerces, so a value only conforms when coercion leaves it unchanged.
+// Wrapping lets it validate non-object values such as text output.
+function assertConforms(schema: TSchema, value: unknown, message: string) {
+  const tool = { name: "check", description: "", parameters: Type.Object({ value: schema }) };
+  const args = { value: value as JsonValue };
+  let validated: unknown;
+  assert.doesNotThrow(() => {
+    validated = validateToolArguments(tool, {
+      type: "toolCall",
+      id: "check",
+      name: "check",
+      arguments: args,
+    });
+  }, message);
+  assert.deepStrictEqual(validated, args, message);
+}
 
 export function testContext({
   ui,
@@ -130,13 +146,15 @@ export function registeredExtension(
           name: definition.name,
           executionMode: definition.executionMode,
           async execute(id, params, signal, _update, context) {
-            assert.ok(Check(definition.parameters, params), `Invalid ${definition.name} arguments`);
+            assertConforms(definition.parameters, params, `Invalid ${definition.name} arguments`);
 
             const result = await definition.execute(id, params, signal, undefined, context);
 
             // Codemode scripts receive structuredContent in place of the text.
-            assert.ok(
-              definition.outputSchema && Check(definition.outputSchema, result.structuredContent),
+            assert.ok(definition.outputSchema, `Missing ${definition.name} output schema`);
+            assertConforms(
+              definition.outputSchema,
+              result.structuredContent,
               `Invalid ${definition.name} structured content`,
             );
 
