@@ -18,6 +18,7 @@ import {
   getCurrentSystemPrompt,
   getCurrentTools,
 } from "@earendil-works/pi-ai";
+import type { TestContext } from "node:test";
 import assert from "node:assert/strict";
 import extension from "../index.ts";
 import test from "node:test";
@@ -48,6 +49,7 @@ const PROBE_TOOLS: { name: string; promptSnippet?: string; promptGuidelines: str
 const TOOL_SETS = [
   ["probe_write", "read", "no_snippet", "codemode"],
   ["probe_write", "read", "no_snippet", "codemode"],
+  ["bash", "read"],
   ["read"],
   [],
 ];
@@ -150,14 +152,18 @@ class PromptSession {
     this.#session?.dispose();
   }
 
-  public async assertToolSet(tools: readonly string[]): Promise<void> {
+  public async assertToolSet(tools: readonly string[]): Promise<(string | null | undefined)[]> {
+    let toolSections: (string | null | undefined)[] = [];
+
     this.#agent.setActiveToolsByName([...tools]);
     this.#provider.setResponses([
       (context): AssistantMessage => {
         const sections = getCurrentSystemMessage(context.messages)?.sections;
 
         assert.ok(sections, "prompt must remain structured");
-        assert.equal(Boolean(sections.active_tool_context), this.#custom);
+        assert.notEqual(sections.tools ?? "", "", "prompt must declare tools");
+        assert.notEqual(sections.rules ?? "", "", "prompt must declare rules");
+        toolSections = [sections.tools, sections.rules];
         assert.deepEqual(
           getCurrentTools(context.messages)
             .map((tool) => tool.name)
@@ -172,6 +178,8 @@ class PromptSession {
     await this.#agent.prompt("Inspect the artifact.");
     assert.equal(this.#agent.getLastAssistantText(), "Verified response");
     this.#serverSummary = UPDATED_SERVER_SUMMARY;
+
+    return toolSections;
   }
 
   public async assertCodemodeRead(): Promise<void> {
@@ -259,25 +267,34 @@ class PromptSession {
   }
 }
 
-for (const custom of [true, false]) {
-  test(`${custom ? "custom" : "stock"} prompt preserves sections, tracks tools, and supports codemode`, async (context) => {
-    const directory = mkdtempSync(join(tmpdir(), "pi-prompt-context-"));
+async function startSession(context: TestContext, custom: boolean): Promise<PromptSession> {
+  const directory = mkdtempSync(join(tmpdir(), "pi-prompt-context-"));
 
-    context.after(() => {
-      rmSync(directory, { force: true, recursive: true });
-    });
-
-    const promptSession = await PromptSession.create(directory, custom);
-
-    context.after(() => {
-      promptSession.dispose();
-    });
-
-    for (const tools of TOOL_SETS) {
-      // oxlint-disable-next-line no-await-in-loop -- Drive the shared fixture and observe each result before the next step.
-      await promptSession.assertToolSet(tools);
-    }
-
-    await promptSession.assertCodemodeRead();
+  context.after(() => {
+    rmSync(directory, { force: true, recursive: true });
   });
+
+  const promptSession = await PromptSession.create(directory, custom);
+
+  context.after(() => {
+    promptSession.dispose();
+  });
+
+  return promptSession;
 }
+
+test("custom prompt renders the stock tools and rules sections and supports codemode", async (context) => {
+  const stock = await startSession(context, false);
+  const custom = await startSession(context, true);
+
+  for (const tools of TOOL_SETS) {
+    // oxlint-disable-next-line no-await-in-loop -- Each comparison drives both fixtures in order.
+    const expected = await stock.assertToolSet(tools);
+
+    // oxlint-disable-next-line no-await-in-loop -- Each comparison drives both fixtures in order.
+    assert.deepEqual(await custom.assertToolSet(tools), expected, tools.join(", "));
+  }
+
+  await stock.assertCodemodeRead();
+  await custom.assertCodemodeRead();
+});
