@@ -35,8 +35,8 @@ export GOBIN="$GOPATH/bin"
 export FLYCTL_INSTALL="/home/drsh4dow/.fly"
 export PATH="$GOBIN:$HOME/.local/bin:$HOME/.cargo/bin:$HOME/bin:$FLYCTL_INSTALL/bin:$PATH"
 export CLICOLOR=1
-export TERMINAL=wezterm
-export BROWSER=firefox-developer-edition
+export TERMINAL=ghostty
+export BROWSER=helium-browser
 export PAGER="less"
 export NODE_OPTIONS=--max-old-space-size=8192
 
@@ -57,10 +57,10 @@ export NNN_PLUG='m:nmount;d:dragdrop'
 
 ################################################
 ### Start Hyprland
-if uwsm check may-start; then
-  systemctl --user import-environment
-  exec uwsm start hyprland.desktop
-fi
+# if uwsm check may-start; then
+#   systemctl --user import-environment
+#   exec uwsm start hyprland.desktop
+# fi
 
 ### Start Sway
 # if [ "$(tty)" = "/dev/tty1" ]; then
@@ -115,9 +115,6 @@ bind "set completion-ignore-case on"
 
 fastfetch
 
-#
-source /usr/share/nvm/init-nvm.sh
-
 # Bun
 export PATH="/home/drsh4dow/.cache/.bun/bin:$PATH"
 export PATH="/home/drsh4dow/.bun/bin:$PATH"
@@ -131,3 +128,13 @@ export PATH="/home/drsh4dow/.moon/bin:$PATH"
 # proto
 export PROTO_HOME="$XDG_DATA_HOME/proto"
 export PATH="$PROTO_HOME/shims:$PROTO_HOME/bin:$PATH"
+
+# Claudex
+alias claudex='claude --settings "$HOME/.claude/cliproxy.json" --allow-dangerously-skip-permissions'
+alias claude='claude --allow-dangerously-skip-permissions'
+
+# Vite+ bin (https://viteplus.dev)
+. "$HOME/.vite-plus/env"
+
+# Kache
+export PATH="/usr/lib/kache:$PATH"

@@ -12,6 +12,13 @@ local act = wezterm.action
 -- default shell
 config.default_prog = { "/usr/bin/bash" }
 
+config.unix_domains = {
+	{
+		name = "unix",
+	},
+}
+config.default_gui_startup_args = { "connect", "unix" }
+
 -- This is where you actually apply your config choices
 
 config.font = wezterm.font("Comic Code Ligatures", {
@@ -39,6 +46,8 @@ config.window_padding = {
 }
 
 config.window_background_opacity = 0.8
+
+config.enable_kitty_keyboard = true
 
 -- config.hide_tab_bar_if_only_one_tab = true
 config.enable_tab_bar = false

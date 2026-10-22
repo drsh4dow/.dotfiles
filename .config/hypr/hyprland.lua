@@ -32,6 +32,8 @@ hl.workspace_rule({ workspace = "name:R2", monitor = "DP-3" })
 -- Environment
 ----------------
 
+local terminal = "ghostty"
+
 hl.env("XCURSOR_SIZE", "24")
 hl.env("GDK_BACKEND", "wayland,x11")
 hl.env("CLUTTER_BACKEND", "wayland")
@@ -43,6 +45,7 @@ hl.env("QT_WAYLAND_DISABLE_WINDOWDECORATION", "1")
 hl.env("QT_AUTO_SCREEN_SCALE_FACTOR", "1")
 hl.env("QT_QPA_PLATFORMTHEME", "kde")
 hl.env("XDG_CURRENT_DESKTOP", "Hyprland")
+hl.env("TERMINAL", terminal)
 hl.env("XDG_SESSION_TYPE", "wayland")
 hl.env("XDG_SESSION_DESKTOP", "Hyprland")
 hl.env("XDG_MENU_PREFIX", "arch-kbuildsycoca6")
@@ -53,7 +56,7 @@ hl.env("XDG_MENU_PREFIX", "arch-kbuildsycoca6")
 
 hl.on("hyprland.start", function()
 	hl.exec_cmd("xrandr --output DP-1 --primary")
-	hl.exec_cmd("dbus-update-activation-environment --systemd WAYLAND_DISPLAY XDG_CURRENT_DESKTOP")
+	hl.exec_cmd("dbus-update-activation-environment --systemd WAYLAND_DISPLAY XDG_CURRENT_DESKTOP TERMINAL")
 	hl.exec_cmd("gsettings set org.gnome.desktop.interface color-scheme prefer-dark")
 	hl.exec_cmd("gsettings set org.gnome.desktop.interface gtk-theme 'Arc-Dark'")
 	hl.exec_cmd("gsettings set org.gnome.desktop.interface icon-theme 'BeautyLine'")
@@ -159,8 +162,7 @@ hl.device({ name = "epic-mouse-v1", sensitivity = -0.5 })
 ----------------
 
 local mainMod = "SUPER"
-local terminal = "wezterm"
-local browser = "firefox-developer-edition"
+local browser = "helium-browser"
 
 hl.bind(mainMod .. " + Return", hl.dsp.exec_cmd(terminal))
 hl.bind(mainMod .. " + B", hl.dsp.exec_cmd(browser))
@@ -175,7 +177,7 @@ hl.bind(
 )
 hl.bind(
 	mainMod .. " + SHIFT + Print",
-	hl.dsp.exec_cmd([[wezterm -e wf-recorder -a -f "/mnt/teradisk/obs-recordings/$(date --iso)-$RANDOM.mp4"]])
+	hl.dsp.exec_cmd(terminal .. [[ -e wf-recorder -a -f "/mnt/teradisk/obs-recordings/$(date --iso)-$RANDOM.mp4"]])
 )
 
 hl.bind(
@@ -326,6 +328,12 @@ hl.window_rule({ match = { initial_title = "^(Choose Files)$" }, float = true })
 hl.window_rule({ match = { initial_title = "^(Save As)$" }, float = true })
 hl.window_rule({ match = { initial_title = "^(Confirm to replace files)$" }, float = true })
 hl.window_rule({ match = { initial_title = "^(File Operation Progress)$" }, float = true })
+hl.window_rule({
+	match = { initial_class = "^(blender)$", initial_title = "^(File Browser)$" },
+	float = true,
+	size = { "monitor_w*0.8", "monitor_h*0.85" },
+	center = true,
+})
 hl.window_rule({
 	match = { class = "^(task-floating)$" },
 	float = true,

@@ -13,23 +13,20 @@ gui:
   # Faster / less clutter
   showRandomTip: false
   showCommandLog: false
-
   # Ergonomics for reviewing AI diffs
   scrollHeight: 4
   scrollPastBottom: true
   scrollOffMargin: 4
-  wrapLinesInStagingView: true
-  useHunkModeInStagingView: true
+  wrapLinesInDiffView: true
+  useHunkModeInDiffView: true
   mainPanelSplitMode: flexible
   splitDiff: auto
-
   # Layout
   sidePanelWidth: 0.28
   expandFocusedSidePanel: true
   expandedSidePanelWeight: 2
   screenMode: normal
   portraitMode: never
-
   # Discoverability / visuals
   showBottomLine: true
   showPanelJumps: true
@@ -37,42 +34,33 @@ gui:
   showFileTree: true
   showRootItemInFileTree: true
   showNumstatInFilesView: true
-
   # If you have Nerd Fonts installed
   nerdFontsVersion: "3"
   showFileIcons: true
-
   # Searching: fuzzy is typically faster for large repos than strict substring
   filterMode: fuzzy
-
   # Optional: turn off the “nuke” animation
   animateExplosion: false
-
 git:
   # Performance: fewer automatic background operations (turn back on if you prefer)
   autoFetch: true
   fetchAll: true
   autoRefresh: true
-
   # Safer defaults for review
   diffContextSize: 8
   renameSimilarityThreshold: 70
   ignoreWhitespaceInDiffView: false
   disableForcePushing: false
-
   # Main branches (used in some displays/behaviors)
   mainBranches:
     - main
     - master
-
   # Single pager setup
-  pagers:
+  diffRenderers:
     # delta: best general-purpose readability + clickable line numbers
-    - pager: >-
-        delta --dark --paging=never --line-numbers
-        --hyperlinks --hyperlinks-file-link-format="lazygit-edit://{path}:{line}"
+    - command: >-
+        delta --dark --paging=never --line-numbers --hyperlinks --hyperlinks-file-link-format="lazygit-edit://{path}:{line}"
       colorArg: always
-
 os:
   # Neovim in a new process (current schema keys)
   edit: "nvim {{filename}}"

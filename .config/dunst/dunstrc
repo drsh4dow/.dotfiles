@@ -2,8 +2,8 @@
     ### Display ###
     monitor = 0
     follow = mouse
-    width = 300
-    height = 200
+    width = 360
+    height = 260
     offset = 20x20
 
     close_all = ctrl+space
@@ -13,7 +13,7 @@
 
     # Shrink window if it's smaller than the width.  Will be ignored if
     # width is 0.
-    shrink = no
+    shrink = yes
 
     # The transparency of the window.  Range: [0; 100].
     # This option will only work if a compositing window manager is
@@ -28,13 +28,13 @@
     # Draw a line of "separator_height" pixel height between two
     # notifications.
     # Set to 0 to disable.
-    separator_height = 2
+    separator_height = 1
 
     # Padding between text and separator.
-    padding = 8
+    padding = 10
 
     # Horizontal padding.
-    horizontal_padding = 10
+    horizontal_padding = 14
 
     # Defines width in pixels of frame around the notification window.
     # Set to 0 to disable.
@@ -42,7 +42,7 @@
 
     # Defines color of the frame around the notification window.
     # frame_color = "#7bc5e4"
-    frame_color = "#444b6a"
+    frame_color = "#89b4fa"
 
     # Define a color for the separator.
     # possible values are:
@@ -60,15 +60,15 @@
     # Set to 0 to disable.
     # A client can set the 'transient' hint to bypass this. See the rules
     # section for how to disable this if necessary
-    idle_threshold = 4
+    idle_threshold = 0
 
     ### Text ###
 
-    font = fixed 11
+    font = Hack Nerd Font 11
 
     # The spacing between lines.  If the height is smaller than the
     # font height, it will get raised to the font height.
-    line_height = 0
+    line_height = 2
 
     # Possible values are:
     # full: Allow a small subset of html markup in notifications:
@@ -104,7 +104,7 @@
     #   %n  progress value if set without any extra characters
     #   %%  Literal %
     # Markup is allowed
-    format = "<b>%s</b>\n%b"
+    format = "<span foreground='#89dceb'><b>%s</b></span>\n<span foreground='#cdd6f4'>%b</span>"
 
     # Alignment of message text.
     # Possible values are "left", "center" and "right".
@@ -150,7 +150,7 @@
     min_icon_size = 0
 
     # Scale larger icons down to this size, set to 0 to disable
-    max_icon_size = 64
+    max_icon_size = 48
 
     # Paths to default icons.
     icon_path = /usr/share/icons/gnome/16x16/status/:/usr/share/icons/gnome/16x16/devices/
@@ -167,7 +167,7 @@
     ### Misc/Advanced ###
 
     # Browser for opening urls in context menu.
-    browser = /usr/bin/firefox-developer-edition -new-tab
+    browser = /usr/bin/helium-browser
 
     # Always run rule-defined scripts, even if the notification is suppressed
     always_run_script = true
@@ -265,27 +265,48 @@
 #    context = ctrl+shift+period
 
 [urgency_low]
-    # IMPORTANT: colors have to be defined in quotation marks.
-    # Otherwise the "#" and following would be interpreted as a comment.
-    background = "#00000050"
-    foreground = "#00ffff"
-    timeout = 3
+    background = "#1e1e2eb3"
+    foreground = "#cdd6f4"
+    frame_color = "#45475a"
+    timeout = 4
     # Icon for notifications with low urgency, uncomment to enable
     #icon = /path/to/icon
 
 [urgency_normal]
-    background = "#00000050"
-    foreground = "#00ffff"
-    timeout = 5
+    background = "#1e1e2ecc"
+    foreground = "#cdd6f4"
+    frame_color = "#89b4fa"
+    timeout = 6
     # Icon for notifications with normal urgency, uncomment to enable
     #icon = /path/to/icon
 
 [urgency_critical]
-    background = "#00000050"
-    foreground = "#00ffff"
-    timeout = 8
+    background = "#1e1e2ed9"
+    foreground = "#cdd6f4"
+    frame_color = "#444b6a"
+    timeout = 10
     # Icon for notifications with critical urgency, uncomment to enable
     #icon = /path/to/icon
+
+# Force persistent notifications (client-set expire_timeout = 0) to auto-dismiss.
+# A rule's plain `timeout` only sets the default used when the client omits a
+# timeout; `override_dbus_timeout` overrides the client-supplied expire_timeout,
+# including the "never expire" value 0. `match_dbus_timeout = 0` targets only
+# those persistent notifications, so apps that request a finite timeout keep it.
+[force_timeout_low]
+    match_dbus_timeout = 0
+    msg_urgency = low
+    override_dbus_timeout = 4
+
+[force_timeout_normal]
+    match_dbus_timeout = 0
+    msg_urgency = normal
+    override_dbus_timeout = 6
+
+[force_timeout_critical]
+    match_dbus_timeout = 0
+    msg_urgency = critical
+    override_dbus_timeout = 10
 
 # Every section that isn't one of the above is interpreted as a rules to
 # override settings for certain messages.
