@@ -1,6 +1,8 @@
 ---
 name: pi-harness
 description: Read before modifying, building on, or answering questions about the pi harness or its @earendil-works libraries (pi-ai, pi-durable, pi-mcp, pi-codemode, chord).
+disable-model-invocation: false
+user-invokable: false
 ---
 
 # Pi harness

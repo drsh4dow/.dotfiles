@@ -1,6 +1,8 @@
 ---
 name: docs-search
-description: Documentation search. Use before relying on uncertain or version-sensitive behavior or when in need of documentation.
+description: Documentation search. Use before relying on uncertain or version-sensitive behavior or when in need of documentation or for library and API questions.
+disable-model-invocation: false
+user-invokable: false
 ---
 
 # Documentation search
