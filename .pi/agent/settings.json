@@ -1,6 +1,6 @@
 {
   "fastMode": {
-    "enabled": false,
+    "enabled": true,
     "providers": {
       "anthropic": {
         "request": {
