@@ -28,6 +28,13 @@
       "autoUpdate": true
     }
   },
+  "modelSettings": {
+    "claude-opus-5-5": {
+      "effortLevel": "xhigh"
+    }
+  },
+  "fastMode": true,
+  "skipDangerousModePermissionPrompt": true,
   "attribution": {
     "commit": "",
     "pr": "",
