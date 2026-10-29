@@ -150,7 +150,7 @@ Size each ticket as a vertical slice. It cuts a narrow path through every layer 
 
 Write the body to a file and run both gates.
 
-1. **Structure.** Run `../writing-good-prs/scripts/check-body.ts ticket <body-file> --title "<title>"`, with `--template <path>` when the repository has an issue template. Fix each printed problem and rerun until it exits 0. Exit 0 means the headings and title parse. It says nothing about the case the body makes.
+1. **Structure.** Run `../writing-good-prs/scripts/check-body.ts ticket <body-file> --title "<title>"`, with `--template <path>` when the repository has an issue template. Fix each printed problem and rerun until it exits 0. Exit 0 means the headings and title parse and the body names no path on your machine, such as one under `~/`, even inside a code block. It says nothing about the case the body makes.
 2. **Implementer read.** Launch one subagent with the Agent tool on `model: opus`, and give it only the title and the body file. Ask it to:
    1. Retell the problem as one story, with who it costs, and name the witness that shows it, or write `none visible`.
    2. For each Done-when item, say exactly what it would run and what result counts as done, or write `unclear`.
