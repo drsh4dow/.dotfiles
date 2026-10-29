@@ -105,7 +105,7 @@ When an expert would ask more than the briefing answers, put the rest in one PR 
   - For a number, what were the sample size, the spread, and the setup?
 - Full logs, each in a `<details>` block under its decisive lines.
 
-After the PR opens and `scripts/check-body.ts comment <evidence-file>` exits 0, post it with `gh pr comment <number> --body-file <evidence-file>`, which prints the comment's URL. Then add that URL as the last line of Verification with `scripts/publish-pr.ts edit`.
+After the PR opens, post it with `scripts/publish-pr.ts comment <number> <evidence-file>`, which posts only after `check-body.ts comment` exits 0, reads the comment back, and prints its URL. Then add that URL as the last line of Verification with `scripts/publish-pr.ts edit`.
 
 ## Example
 

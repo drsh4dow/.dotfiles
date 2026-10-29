@@ -1,6 +1,6 @@
 #!/usr/bin/env node
-// Publish a PR title and body with gh, only after check-body.ts passes them, then read the
-// PR back and compare it with what was sent.
+// Publish a PR title and body, or an evidence comment, with gh, only after check-body.ts passes
+// them, then read the PR or comment back and compare it with what was sent.
 // Exit: 0 published and read back equal, 1 check-body found problems, 64 bad argument or
 // unreadable file, 2 a gh call failed or check-body could not run, 3 the readback differs.
 
@@ -34,7 +34,8 @@ class Failure {
 
 const usage =
   "expected create <body-file> --title <title> [--base <branch>] [--head <branch>] [--repo <owner/repo>] [--template <file>], " +
-  "or edit <number> <body-file> --title <title> [--repo <owner/repo>] [--template <file>]";
+  "or edit <number> <body-file> --title <title> [--repo <owner/repo>] [--template <file>], " +
+  "or comment <number> <comment-file> [--repo <owner/repo>]";
 
 const optionsFor = {
   create: ["--title", "--base", "--head", "--repo", "--template"],
@@ -90,13 +91,9 @@ function flag(name: string, value: string | undefined): string[] {
   return value === undefined ? [] : [name, value];
 }
 
-function checkBody(args: Arguments): number {
+function checkBody(checkArgs: readonly string[]): number {
   const script = join(dirname(process.argv[1] ?? "."), "check-body.ts");
-  const result = spawnSync(
-    process.execPath,
-    [script, "pr", args.bodyFile, "--title", args.title, ...flag("--template", args.template)],
-    { stdio: "inherit" },
-  );
+  const result = spawnSync(process.execPath, [script, ...checkArgs], { stdio: "inherit" });
 
   if (result.status === 0 || result.status === 1 || result.status === 64) return result.status;
 
@@ -360,12 +357,49 @@ function publish(args: Arguments, draft: string): number {
   }
 }
 
+// Only --repo and its value may follow the comment file.
+function comment(argv: readonly string[]): number {
+  const [pr, file, ...rest] = argv;
+  const repoFlag = rest[0] === "--repo" ? flag("--repo", rest[1]) : [];
+
+  if (!/^[1-9][0-9]*$/.test(pr ?? "") || file === undefined || rest.length !== repoFlag.length) {
+    console.error(`publish-pr: ${usage}`);
+    return 64;
+  }
+
+  const checked = checkBody(["comment", file]);
+
+  if (checked !== 0) return checked;
+
+  const sent = comparable(readFileSync(file, "utf8"));
+  const posted = gh(["pr", "comment", pr, "--body-file", file, ...repoFlag]);
+
+  if (posted instanceof Failure) return ghFailed(posted);
+
+  const url = posted.trim();
+  const select = `.comments[] | select(.url == ${JSON.stringify(url)}) | .body`;
+  const readBack = gh(["pr", "view", pr, "--json", "comments", "--jq", select, ...repoFlag]);
+
+  if (readBack instanceof Failure) return ghFailed(readBack);
+
+  if (comparable(readBack) !== sent) {
+    console.error("publish-pr: the comment read back differs (- sent, + read back):");
+    for (const line of lineDiff(sent, comparable(readBack))) console.error(`publish-pr: ${line}`);
+    return 3;
+  }
+
+  console.log(`publish-pr: posted ${url}`);
+  return 0;
+}
+
 function ghFailed(failure: Failure): number {
   console.error(`publish-pr: ${failure.message}`);
   return 2;
 }
 
 function main(): number {
+  if (process.argv[2] === "comment") return comment(process.argv.slice(3));
+
   const args = parseArguments(process.argv.slice(2));
 
   if (args instanceof Failure) {
@@ -373,7 +407,8 @@ function main(): number {
     return 64;
   }
 
-  const checked = checkBody(args);
+  const checkOptions = ["--title", args.title, ...flag("--template", args.template)];
+  const checked = checkBody(["pr", args.bodyFile, ...checkOptions]);
 
   if (checked !== 0) return checked;
 
