@@ -22,7 +22,7 @@ The best change leaves the fewest lines that still read well.
 - Write boring, explicit code that a tired maintainer reads in one pass. Add a helper or layer only when its name lets the caller read on without opening it. Inline wrappers that have one caller. Keep nesting to three levels or fewer.
 - Reuse what the repo already has before you write something new.
 - Name things with the repo's domain terms from its glossary or `CONTEXT.md`. When you introduce a term, add it there.
-- Put net lines in every final report and final PR, from `git diff --shortstat <target>...HEAD` with lockfiles and generated files left out by `:!` pathspecs. When the net is positive, say what the added lines buy.
+- Before you report, check net lines with `git diff --shortstat <target>...HEAD`, leaving out lockfiles and generated files with `:!` pathspecs. When the net is positive, say in the report what the added lines buy.
 
 ## Talk
 
@@ -30,7 +30,7 @@ The best change leaves the fewest lines that still read well.
 - In your first message on a task, also say what an expert would do that the user did not ask for, deeper rather than bigger, per the **sharpen** skill. Skip it for a fully specified small edit.
 - Put every question in one message. Number each decision and give your pick with a one-line reason. The user answers by number, as in "1. agree 2. drop it".
 - "Propose", "draft", and "just answer" mean reply in chat and change nothing. Put drafts in the chat, not in a new markdown file. Files are for state and evidence.
-- End a task with what changed and why, how you checked it, the net lines, each repo you touched and whether it is pushed, and open decisions as numbered asks.
+- End a task with what changed and why, how you checked it, each repo you touched and whether it is pushed, and open decisions as numbered asks.
 
 ## Autonomy
 
@@ -55,6 +55,5 @@ Run multi-PR work per poteto-mode's Autopilot-stack playbook, with these additio
 
 - The final PRs target the repo's staging branch or its equivalent, else main. Confirm it at the start when you inferred it.
 - Each final PR's branch is an integration branch, `chunk/<slug>`. Its owner splits the work into intermediate PRs into that branch, each built by a fresh `sh4dow-agent` in its own worktree. A second agent reviews and runs each intermediate PR, and an agent merges it once that review passes at its head commit, with `gh pr merge --match-head-commit <sha>`. Only final PRs reach the user.
-- Write each final PR with the **writing-good-prs** skill and put the net lines in its Evidence.
-- After the handoff, babysit the final PRs with the **babysit** skill until the user merges them.
-- After each merge, wait for the staging deploy and dogfood the change there. When the full work reaches production, dogfood it there too. Report a failure to the user at once, with screenshots and logs.
+- Write each final PR with the **writing-good-prs** skill.
+- After the user merges a final PR, wait for the staging deploy and dogfood the change there. When the full work reaches production, dogfood it there too. Report a failure to the user at once, with screenshots and logs.
