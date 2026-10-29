@@ -9,3 +9,4 @@ web-search.json
 .pi/node_modules/
 .claude/skills/**/node_modules/
 .claude/skills/**/__pycache__/
+.claude/skills/synced/
