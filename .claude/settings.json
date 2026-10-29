@@ -14,6 +14,20 @@
       }
     ]
   },
+  "enabledPlugins": {
+    "cc-plugin-telemetry@builtin": false,
+    "pstack@cursor-plugins": true,
+    "skills-for-real-engineers@anthropic-plugin-directory": true
+  },
+  "extraKnownMarketplaces": {
+    "cursor-plugins": {
+      "source": {
+        "source": "github",
+        "repo": "cursor/plugins"
+      },
+      "autoUpdate": true
+    }
+  },
   "attribution": {
     "commit": "",
     "pr": "",
