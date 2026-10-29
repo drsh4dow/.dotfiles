@@ -105,7 +105,7 @@ When an expert would ask more than the briefing answers, put the rest in one PR 
   - For a number, what were the sample size, the spread, and the setup?
 - Full logs, each in a `<details>` block under its decisive lines.
 
-Post it after the PR opens with `gh pr comment <number> --body-file <evidence-file>`, which prints the comment's URL. Then add that URL as the last line of Verification with `scripts/publish-pr.ts edit`.
+After the PR opens and `scripts/check-body.ts comment <evidence-file>` exits 0, post it with `gh pr comment <number> --body-file <evidence-file>`, which prints the comment's URL. Then add that URL as the last line of Verification with `scripts/publish-pr.ts edit`.
 
 ## Example
 
@@ -175,7 +175,7 @@ Its Why lists symbols instead of a story, tells how the work was produced, and n
 
 Write the body to a file and run both gates.
 
-1. **Structure.** Run `scripts/check-body.ts pr <body-file> --title "<title>"`, with `--template <path>` when the repository has a PR template. Fix each printed problem and rerun until it exits 0. Exit 0 means the headings, the title's form and length, the Why length, the body length, the Blast Radius door, and Verification's witness and Not checked line pass. It says nothing about the case the body makes. A `warning:` line leaves the exit code alone. It marks a sentence about how the work was produced, or a line that may leave a choice open. Rewrite a production sentence for the reader of this diff, or keep it when that reader needs it to merge or deploy. Settle an open choice before the PR is ready for review: make it when it is yours, answer it from a source, or get its owner's answer and cite it. Otherwise keep the PR a draft.
+1. **Structure.** Run `scripts/check-body.ts pr <body-file> --title "<title>"`, with `--template <path>` when the repository has a PR template. Fix each printed problem and rerun until it exits 0. Exit 0 means the headings, the title's form and length, the Why length, the body length, the Blast Radius door, and Verification's witness and Not checked line pass. This run and the evidence comment's run both fail on a path on your machine, such as one under `~/`, even inside a code block. It says nothing about the case the body makes. A `warning:` line leaves the exit code alone. It marks a sentence about how the work was produced, or a line that may leave a choice open. Rewrite a production sentence for the reader of this diff, or keep it when that reader needs it to merge or deploy. Settle an open choice before the PR is ready for review: make it when it is yours, answer it from a source, or get its owner's answer and cite it. Otherwise keep the PR a draft.
 2. **Expert read.** Launch one subagent with the Agent tool on `model: opus`, and give it only the title, the body file, and the evidence file when there is one, with no diff, ticket, or chat. Ask it to:
    1. Retell the problem as one story, and why this fix rather than the alternative.
    2. As an expert in this domain who must own the change, list every question it would need answered to trust the proof. For each, quote the line that answers it, or write `unanswered`.

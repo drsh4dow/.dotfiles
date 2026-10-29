@@ -1,13 +1,15 @@
 #!/usr/bin/env node
-// Print each problem in a PR or ticket body, one per line, as <body-file>:<line>: <problem>.
+// Print each problem in a PR body, ticket body, or evidence comment, one per line, as
+// <body-file>:<line>: <problem>.
 // A line that starts with "warning:" is a judgment call and leaves the exit code alone.
 // Exit: 0 clean or warnings only, 1 problems, 64 bad argument or unreadable file.
 
 // Without import statements the file runs as CommonJS or as an ES module, so a
 // copy of the skill under any package.json runs without a warning.
 const { readFileSync } = process.getBuiltinModule("node:fs");
+const { homedir } = process.getBuiltinModule("node:os");
 
-type Kind = "pr" | "ticket";
+type Kind = "pr" | "ticket" | "comment";
 
 type SectionRule = { heading: string; required: boolean };
 
@@ -49,14 +51,15 @@ const defaultShapes: Record<Kind, readonly SectionRule[]> = {
     { heading: "Suggested approach", required: false },
     { heading: "Context", required: false },
   ],
+  comment: [{ heading: "Evidence", required: true }],
 };
 
-const usage = "expected <pr|ticket> <body-file> [--title <title>] [--template <file>]";
+const usage = "expected <pr|ticket|comment> <body-file> [--title <title>] [--template <file>]";
 
 function parseArguments(argv: readonly string[]): Arguments | Failure {
   const [kind, bodyFile, ...options] = argv;
 
-  if ((kind !== "pr" && kind !== "ticket") || bodyFile === undefined) {
+  if ((kind !== "pr" && kind !== "ticket" && kind !== "comment") || bodyFile === undefined) {
     return new Failure(usage);
   }
 
@@ -267,7 +270,7 @@ function contentFindings(kind: Kind, body: Body): Finding[] {
     });
   }
 
-  if (kind === "ticket") return findings;
+  if (kind !== "pr") return findings;
 
   const why = sectionNamed(body, ["why"]);
 
@@ -320,6 +323,27 @@ const bodyLineCap = 40;
 // A squash merge makes the PR title a commit subject, and writing-good-commits keeps a header
 // within 72.
 const prTitleCap = 72;
+
+// Places on the author's machine, which no reviewer can open. Pasted CI logs hold /home/runner/
+// and bare /tmp/ paths, so neither is here.
+const localPaths = [`${homedir()}/`, "~/", ".local/state/", ".worktrees/", "/tmp/claude-"];
+const localPlace = /\b(state[ -]folder|scratchpad|on the author's machine)\b/gi;
+
+// Code blocks count too, since a pasted log can carry a local path. A place word inside a
+// local path is part of that one hit.
+function localPathFindings(body: Body): Finding[] {
+  return body.lines.flatMap((line) => {
+    const words = line.text.split(/[\s`"()<>[\]]+/);
+    const paths = words.filter((word) => localPaths.some((path) => word.includes(path)));
+    const rest = words.filter((word) => !paths.includes(word)).join(" ");
+    const places = rest.match(localPlace) ?? [];
+
+    return [...paths, ...places].map((hit) => ({
+      where: line.number,
+      message: `"${hit}" names a place on your machine that no reviewer can open, paste what it holds or cut it`,
+    }));
+  });
+}
 
 // Words from a multi-PR run that only its orchestrator understands.
 const productionHistory =
@@ -432,6 +456,7 @@ function main(): number {
     ...(args.title === undefined ? [] : titleFindings(args.kind, args.title)),
     ...headingFindings(body, shape),
     ...contentFindings(args.kind, body),
+    ...localPathFindings(body),
   ];
   const warnings = args.kind === "pr" ? [...historyWarnings(body), ...openQuestionWarnings(body)] : [];
 
