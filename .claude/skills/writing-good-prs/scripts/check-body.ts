@@ -37,9 +37,11 @@ class Failure {
 const defaultShapes: Record<Kind, readonly SectionRule[]> = {
   pr: [
     { heading: "Why", required: true },
-    { heading: "Shape", required: false },
-    { heading: "Evidence", required: true },
-    { heading: "Risk", required: true },
+    { heading: "What changed", required: false },
+    { heading: "Scope", required: true },
+    { heading: "Tradeoffs", required: false },
+    { heading: "Blast Radius", required: true },
+    { heading: "Verification", required: true },
   ],
   ticket: [
     { heading: "Problem", required: true },
@@ -231,8 +233,9 @@ function contentFindings(kind: Kind, body: Body): Finding[] {
 
   const evidence = sectionNamed(body, ["evidence", "verification"]);
   // A witness is something the reviewer sees: pasted output, a table, media, or a link.
-  // Inline code alone names a command without showing what it printed.
-  const witness = /https?:\/\/|!\[|<img|<video|<details|^\s*(```|~~~)|^\s*\|/;
+  // Inline code alone names a command without showing what it printed, unless it pairs the
+  // output before and after, as in `a-61 end` → `a-61 b-62 end`.
+  const witness = /https?:\/\/|!\[|<img|<video|<details|^\s*(```|~~~)|^\s*\||`[^`]+`\s*→\s*`[^`]+`/;
 
   if (evidence !== undefined && !evidence.lines.some((line) => witness.test(line.text))) {
     findings.push({
@@ -281,40 +284,25 @@ function contentFindings(kind: Kind, body: Body): Finding[] {
     }
   }
 
-  const risk = sectionNamed(body, ["risk"]);
+  const blastRadius = sectionNamed(body, ["blast radius"]);
 
-  if (risk !== undefined) {
-    const labels = new Map(
-      risk.lines.flatMap((line) => {
-        const label = line.text.match(/^\s*- \*\*(Blast radius|Door|Merge condition)\.\*\*(.*)$/i);
-        return label ? [[label[1].toLowerCase(), label[2].trim()] as const] : [];
-      }),
-    );
+  if (
+    blastRadius !== undefined &&
+    !proseLines(blastRadius.lines).some((line) => /\b(one|two)-way\b/i.test(line.text))
+  ) {
+    findings.push({
+      where: blastRadius.line,
+      message: `"## ${blastRadius.heading}" does not say whether the door is one-way or two-way`,
+    });
+  }
 
-    for (const label of ["Blast radius", "Door", "Merge condition"]) {
-      const fact = labels.get(label.toLowerCase());
+  const length = body.lines.findLastIndex((line) => line.text.trim() !== "") + 1;
 
-      if (fact === undefined) {
-        findings.push({
-          where: risk.line,
-          message: `"## Risk" has no "- **${label}.**" line`,
-        });
-      } else if (fact === "") {
-        findings.push({
-          where: risk.line,
-          message: `"## Risk" has an empty "- **${label}.**" line, give the fact`,
-        });
-      }
-    }
-
-    const door = labels.get("door");
-
-    if (door !== undefined && !/\b(one|two)-way\b/i.test(door)) {
-      findings.push({
-        where: risk.line,
-        message: '"## Risk" Door line does not say one-way or two-way',
-      });
-    }
+  if (length > bodyLineCap) {
+    findings.push({
+      where: bodyLineCap + 1,
+      message: `body has ${length} lines, cut it to ${bodyLineCap} or fewer and move the rest to the evidence comment`,
+    });
   }
 
   return findings;
@@ -323,8 +311,11 @@ function contentFindings(kind: Kind, body: Body): Finding[] {
 // The "Closes #N", "Part of #N", and "Depends on #N" lines that end a Why.
 const ticketLine = /^\s*(Closes|Fixes|Resolves|Part of|Depends on|Refs:?)\s/i;
 
-// Two short paragraphs. The longest of three hand-written multi-ticket Whys ran 166 words.
-const whyWordCap = 180;
+// One to three short sentences, per pstack's Opening a PR playbook.
+const whyWordCap = 70;
+
+// The body becomes the squash commit body, which the playbook keeps under about 40 lines.
+const bodyLineCap = 40;
 
 // A squash merge makes the PR title a commit subject, and writing-good-commits keeps a header
 // within 72.

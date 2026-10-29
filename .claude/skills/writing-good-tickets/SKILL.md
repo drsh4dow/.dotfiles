@@ -67,7 +67,7 @@ Optional, and never binding: the implementer owns the how. Give it when you hold
 
 - The cause you suspect, marked `Hypothesis` with what you saw that points to it.
 - A possible approach and the alternative you would rule out, with the reason.
-- A visual from the **writing-good-prs** Shape menu when it shows the idea faster than prose.
+- A visual from the list under What changed in **writing-good-prs** when it shows the idea faster than prose.
 
 Name behavior and symbols, not file paths. Finding where a symbol lives is one search.
 
