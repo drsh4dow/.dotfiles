@@ -158,7 +158,7 @@ Write the body to a file and run the three gates.
 
    Run the read once. Fix every gap its answers show, then move on without a second read.
 
-   A subagent cannot launch another, so when you run as one, write the body file and name this read in your report for your parent to run.
+   Run this read yourself even when you run as a subagent, and publish only after it has run. Only when your session has no Agent tool, write the body file, publish nothing, and name the read in your report for your parent to run.
 3. **Facts.** The implementer read finds gaps, not false facts. Settle each claim you marked inferred with the read that decides it, such as one query or one `curl`, or carry its label word for word into every copy of the claim.
 
 Publish the same file through the tracker, then read the ticket back and compare what the tracker stored with the title and the body file. On GitHub, publish with `gh issue create --body-file` or `gh issue edit --body-file`, read back with `gh issue view <n> --json title,body`, and diff the body with `gh issue view <n> --json body --jq .body | diff <body-file> -`. Fix each difference at its cause, such as a shell expansion or a template the tracker applied, republish, and read it back once more. Report any difference that remains.
