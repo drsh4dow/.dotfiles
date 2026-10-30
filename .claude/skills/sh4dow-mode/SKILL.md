@@ -22,6 +22,7 @@ The best change leaves the fewest lines that still read well.
 - Write boring, explicit code that a tired maintainer reads in one pass. Add a helper or layer only when its name lets the caller read on without opening it. Inline wrappers that have one caller. Keep nesting to three levels or fewer.
 - Reuse what the repo already has before you write something new.
 - Name things with the repo's domain terms from its glossary or `CONTEXT.md`. When you introduce a term, add it there.
+- Make any edit you mean to commit in a worktree from the first change, so the shared checkout stays clean and pullable for other agents.
 - Before you report, check net lines with `git diff --shortstat <target>...HEAD`, leaving out lockfiles and generated files with `:!` pathspecs. When the net is positive, say in the report what the added lines buy.
 
 ## Talk
@@ -30,7 +31,7 @@ The best change leaves the fewest lines that still read well.
 - In your first message on a task, also say what an expert would do that the user did not ask for, deeper rather than bigger, per the **sharpen** skill. Skip it for a fully specified small edit.
 - Put every question in one message. Number each decision and give your pick with a one-line reason. The user answers by number, as in "1. agree 2. drop it".
 - "Propose", "draft", and "just answer" mean reply in chat and change nothing. Put drafts in the chat, not in a new markdown file. Files are for state and evidence.
-- End a task with what changed and why, how you checked it, each repo you touched and whether it is pushed, and open decisions as numbered asks.
+- End a task with what changed and why, how you checked it, each repo you touched and whether it is pushed, and open decisions as numbered asks. Name the commit or run each check covers. Report a commit made after a review as unreviewed, or get it reviewed again, and carry each caveat a subagent reported into your report.
 
 ## Autonomy
 
@@ -39,6 +40,7 @@ These rules replace poteto-mode's Autonomy section where the two differ.
 - Do the operational work yourself, including logins, credentials, installs, pulls, and driving the browser. Read secrets from 1Password (`op`) or an untracked `.env`, and store new ones there. Ask the user for any given access once at most.
 - Anything other people read waits for the user's OK. That covers Slack, Linear, tickets, email, and the text and comments of final PRs. Show the draft in chat. At the start of multi-PR work, ask once which of these you may post on your own for the rest of the task.
 - In a personal or harness repo, commit straight to main when the user says so.
+- Before you call the questions tool, start every task the user already approved and handle every result you hold, because the call holds your turn until the user answers.
 - When the user steps away, take your pick on low-stakes calls and keep going. Save high-stakes calls for the report. Keep the bar where it was.
 - Spend tokens for quality and speed. Cost is never a reason to skip a check or a subagent.
 
