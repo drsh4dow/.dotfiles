@@ -38,7 +38,7 @@ Write `area: symptom`, with no trailing period: the trigger and what the reader 
 
 ### Problem
 
-1. **Open with one story, in the present tense.** Who hits it, the trigger, what happens, what should happen, and what it costs. For a feature, the story is the person and the moment the current behavior fails them, quoted in their words when you have them. This story is the baseline: the closing PR is judged by whether the same story now ends differently.
+1. **Open with one story, in the present tense.** Who hits it, the trigger, what happens, what should happen, and what it costs. For a feature, the story is the person and the moment the current behavior fails them, quoted in their words when you have them. This story is the baseline: the closing PR is judged by whether the same story now ends differently. Name each person in it by role, such as a Clinician or an engineer, never by name. Only a decision about who owns a step names a person.
 2. **Show the witness.** Paste the decisive lines: output, a log excerpt, a screenshot, or a quoted report, with where you saw it and how often, such as `3 of 3 runs`.
 3. **Give the recipe.** The exact steps, run from a fresh clone of the repository after its normal setup. Say whether you reproduced it yourself, and write `reported, not reproduced` when you did not.
 
@@ -148,9 +148,9 @@ Size each ticket as a vertical slice. It cuts a narrow path through every layer 
 
 ## Check the body
 
-Write the body to a file and run both gates.
+Write the body to a file and run the three gates.
 
-1. **Structure.** Run `../writing-good-prs/scripts/check-body.ts ticket <body-file> --title "<title>"`, with `--template <path>` when the repository has an issue template. Fix each printed problem and rerun until it exits 0. Exit 0 means the headings and title parse and the body names no path on your machine, such as one under `~/`, even inside a code block. It says nothing about the case the body makes.
+1. **Structure.** Run `../writing-good-prs/scripts/check-body.ts ticket <body-file> --title "<title>"`, with `--template <path>` when the repository has an issue template. A parent issue that holds a spec keeps the spec's headings, so pass `--template` with a file that lists them, which still checks paths and the title. Fix each printed problem and rerun until it exits 0. Exit 0 means the headings and title parse and the body names no path on your machine, such as one under `~/`, even inside a code block. It says nothing about the case the body makes.
 2. **Implementer read.** Launch one subagent with the Agent tool on `model: opus`, and give it only the title and the body file. Ask it to:
    1. Retell the problem as one story, with who it costs, and name the witness that shows it, or write `none visible`.
    2. For each Done-when item, say exactly what it would run and what result counts as done, or write `unclear`.
@@ -159,5 +159,6 @@ Write the body to a file and run both gates.
    Run the read once. Fix every gap its answers show, then move on without a second read.
 
    A subagent cannot launch another, so when you run as one, write the body file and name this read in your report for your parent to run.
+3. **Facts.** The implementer read finds gaps, not false facts. Settle each claim you marked inferred with the read that decides it, such as one query or one `curl`, or carry its label word for word into every copy of the claim.
 
 Publish the same file through the tracker, then read the ticket back and compare what the tracker stored with the title and the body file. On GitHub, publish with `gh issue create --body-file` or `gh issue edit --body-file`, read back with `gh issue view <n> --json title,body`, and diff the body with `gh issue view <n> --json body --jq .body | diff <body-file> -`. Fix each difference at its cause, such as a shell expansion or a template the tracker applied, republish, and read it back once more. Report any difference that remains.
