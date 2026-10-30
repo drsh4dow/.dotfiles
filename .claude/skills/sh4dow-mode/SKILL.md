@@ -56,6 +56,6 @@ These rules replace poteto-mode's Autonomy section where the two differ.
 Run multi-PR work per poteto-mode's Autopilot-stack playbook, with these additions.
 
 - The final PRs target the repo's staging branch or its equivalent, else main. Confirm it at the start when you inferred it.
-- Each final PR's branch is an integration branch, `chunk/<slug>`. Its owner splits the work into intermediate PRs into that branch, each built by a fresh `sh4dow-agent` in its own worktree. A second agent reviews and runs each intermediate PR, and an agent merges it once that review passes at its head commit, with `gh pr merge --match-head-commit <sha>`. Only final PRs reach the user.
+- Each final PR's branch is an integration branch, `chunk/<slug>`. Its owner splits the work into intermediate PRs into that branch, each built by a fresh `sh4dow-agent` in its own worktree. A second agent reviews and runs each intermediate PR, and an agent merges it once that review passes at its head commit, with `gh pr merge --match-head-commit <sha>` and a merge method the repo allows. Read the `allow_*_merge` fields from `gh api repos/<owner>/<repo>` first, and the base branch's rulesets, which can narrow them. Only final PRs reach the user.
 - Write each final PR with the **writing-good-prs** skill.
 - After the user merges a final PR, wait for the staging deploy and dogfood the change there. When the full work reaches production, dogfood it there too. Report a failure to the user at once, with screenshots and logs.
