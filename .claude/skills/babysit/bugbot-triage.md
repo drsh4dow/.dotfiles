@@ -140,3 +140,30 @@ Append new candidate learnings here during or after babysitting when they look t
   exists for a missing dependency rather than a failed operation.
 - Source: one CLI-rename PR whose fallback existed for a missing binary rather
   than a failed command.
+
+### Deputy duplicate rule on a PR whose sub-PRs merged into its branch
+
+- Confidence: candidate
+- Skip when: Deputy's duplicate rule (DEP-J5) names a PR that merged into this
+  PR's own head branch, such as an integration or migration branch, so that
+  work reaches the default branch only through this PR.
+- Do not skip when: The named PR merged into the default branch, or it is
+  still open and changes the same files on its own.
+- Example signal: A DEP-J5 duplicate flag whose named PR has this PR's head
+  branch as its base.
+- Source: two final PRs built from integration branches, where each flag
+  named one of the PR's own sub-PRs.
+
+### Deputy Done-ticket rule with a merged sibling in the same repo
+
+- Confidence: candidate
+- Skip when: Deputy's Done-ticket rule (DEP-H6) flags that the ticket is Done
+  while this PR is open, and the ticket closed on a sibling PR in the same repo
+  that already merged. The rule's exemption counts only sibling PRs in other
+  repos.
+- Do not skip when: No merged PR meets the ticket's done-when, or someone moved
+  the ticket to Done without evidence.
+- Example signal: A DEP-H6 flag on a follow-up PR to a ticket whose main PR
+  merged in the same repo.
+- Source: two follow-up PRs, a CI fix and a copy change, filed under tickets
+  their first PRs had already closed.
