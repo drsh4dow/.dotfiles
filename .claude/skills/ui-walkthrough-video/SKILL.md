@@ -106,6 +106,8 @@ Delete or clearly mark superseded files. Two of the files in one handoff were by
 
 Everything is in `scripts/`. Each script takes parameters (no hard-coded paths or sizes), prints usage with `--help`, and has a self-test on synthetic input. `scripts/self-test` runs them all. They need ffmpeg, uv, Node 22+ and Chromium (`$CHROMIUM`, default `chromium`). Captions use `fonts/Inter-Regular.ttf` (OFL, see `fonts/Inter-OFL.txt`).
 
+Run each script as an executable, as in `scripts/sync.py VIDEO`, so its `uv run --script` shebang installs the dependencies it declares. Take frames with `frames.py` rather than your own ffmpeg command, because current ffmpeg has dropped `-vsync`.
+
 | Script | Block |
 | --- | --- |
 | `drive.py` | human-paced driver, events log, take provenance, preflight |
