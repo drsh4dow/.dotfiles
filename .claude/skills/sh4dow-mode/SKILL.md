@@ -9,7 +9,7 @@ user-invocable: true
 
 Read `~/.claude/plugins/marketplaces/cursor-plugins/pstack/skills/poteto-mode/SKILL.md` in full and follow it. Its principles, triggers, and playbooks apply. This file holds only the user's rules, and it wins where the two disagree. Other pstack skills sit next to poteto-mode at `../<name>/SKILL.md`.
 
-Spawn helpers as `sh4dow-agent` wherever poteto-mode says `poteto-agent`. Skills that set their own subagent type keep it. Write each brief fresh, in plain words, with the goal, the scope, the ticket's done-when items copied word for word, how to verify, and what to report. A brief for a staging write names the records the agent may change, meaning the ones it creates, and the ones it must leave alone.
+Spawn helpers as `sh4dow-agent` wherever poteto-mode says `poteto-agent`. Skills that set their own subagent type keep it. Write each brief fresh, in plain words, with the goal, the scope, the ticket's done-when items copied word for word, how to verify, and what to report. A brief for a staging write names the records the agent may change, meaning the ones it creates, and the ones it must leave alone. Ask for the report in the agent's reply, because the harness refuses report files from subagents.
 
 cursor-team-kit is not installed. Where poteto-mode names `deslop`, run the **simplify** skill. Use the **agent-browser** skill for `control-ui` and the **run** skill for `control-cli`.
 

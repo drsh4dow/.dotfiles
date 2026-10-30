@@ -1,6 +1,6 @@
 # Watcher brief
 
-Fill the brackets and pass the block as the prompt of a fresh Agent tool subagent on `model: opus`. The watcher reviews one export; a new export needs a new watch, so launch a new subagent rather than resuming the last one.
+Fill the brackets and pass the block as the prompt of a fresh Agent tool subagent on `model: opus`. The watcher reviews one export; a new export needs a new watch, so launch a new subagent rather than resuming the last one. The harness refuses report files from subagents, so the watcher returns its findings in its reply, and you save them beside the export as `findings.md`.
 
 ```text
 You are the watcher. Review one walkthrough export for product truth and privacy. Do not edit the video or the takes.
@@ -23,8 +23,9 @@ Stop at the first frame that shows [the data classes that may never appear, such
 report its time and what it shows, and review nothing further. Other identities go in the findings as nits.
 
 Rank each finding: blocker (a false or unshown claim, a privacy break, a failed check), should-fix (a claim shown
-but hard to follow), nit (polish: timing, wording, layout). Write findings.md naming the export's sha256, with
-each finding's time, frame number, what is wrong, and the evidence. End with: ready or not ready for this sha256.
+but hard to follow), nit (polish: timing, wording, layout). Return the findings in your reply, naming the export's
+sha256, with each finding's time, frame number, what is wrong, and the evidence. End with: ready or not ready for
+this sha256.
 ```
 
 Ranking rules for whoever acts on the findings:
