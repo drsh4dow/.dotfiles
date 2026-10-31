@@ -44,6 +44,7 @@ function mergeCell(row: T.PrSnapshot): string {
   if (row.facts.isDraft) return "⏸ draft";
   if (row.facts.reviewDecision === "CHANGES_REQUESTED")
     return "⚠️ changes requested";
+  if (row.facts.mergeStateStatus === "BEHIND") return "⚠️ behind base";
   return row.facts.mergeable === "CONFLICTING" ||
     row.facts.mergeStateStatus === "DIRTY" ||
     row.facts.mergeStateStatus === "CONFLICTING"
@@ -75,6 +76,12 @@ type StatusQueryBlocker = {
   readonly kind: "status-query";
   readonly failures: number;
   readonly failure: { readonly detail: string };
+};
+const gateActions: Record<T.MergeGateReason, string> = {
+  "closed-without-merge": "restore or remove the closed PR from the queued stack",
+  "draft-pr": "mark the PR ready for review before waiting for the merge queue",
+  "changes-requested": "resolve the changes-requested review before waiting for the merge queue",
+  "behind-base": "merge the base into this branch and each branch above it, bottom up, in one worktree, then push fast-forwards; GitHub answers 403 to update-branch on a stacked PR",
 };
 function renderBlocker(blocker: T.MergeBlocker | StatusQueryBlocker): string {
   switch (blocker.kind) {
@@ -111,19 +118,12 @@ function renderBlocker(blocker: T.MergeBlocker | StatusQueryBlocker): string {
         ...details,
       ].join("\n");
     }
-    case "merge-gate": {
-      const action =
-        blocker.reason === "closed-without-merge"
-          ? "restore or remove the closed PR from the queued stack"
-          : blocker.reason === "draft-pr"
-            ? "mark the PR ready for review before waiting for the merge queue"
-            : "resolve the changes-requested review before waiting for the merge queue";
+    case "merge-gate":
       return [
         `BLOCKER: ${blocker.reason}`,
         `pr=${blocker.pr.number}`,
-        `action=${action}`,
+        `action=${gateActions[blocker.reason]}`,
       ].join("\n");
-    }
     case "status-query":
       return [
         "BLOCKER: status-query",

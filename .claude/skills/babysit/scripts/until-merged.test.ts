@@ -749,6 +749,14 @@ describe("blockers", () => {
     expect(first.items[0]?.excerpt).toContain("merge-conflicts");
     expect((await watch(scene, acks(first.items))).code).toBe(5);
   });
+
+  it("reports a branch behind its base instead of merge-ready", async () => {
+    const scene = world();
+    scene.checks.set(1, passing);
+    scene.facts.set(1, { mergeStateStatus: "BEHIND" });
+    const first = await watch(scene);
+    expect(first.items.map((item) => item.excerpt)).toEqual(["merge-gate on #1: behind-base"]);
+  });
 });
 
 describe("outages", () => {

@@ -326,6 +326,19 @@ describe("main", () => {
     });
   });
 
+  it("flags a branch behind its base", async () => {
+    const pr = ["--owner", "owner", "--repo", "repo", "--pr", "1"];
+    const behind = () => testRuntime(fakeReader({ facts: { mergeStateStatus: "BEHIND" } }));
+    const ready = behind();
+    expect(await main([...pr, "--until-ready"], ready.runtime)).toBe(6);
+    expect(JSON.parse(ready.stdout[0] ?? "")).toMatchObject({
+      blocker: { kind: "merge-gate", reason: "behind-base" },
+    });
+    const status = behind();
+    await main([...pr, "--status-only", "--pretty"], status.runtime);
+    expect(status.stdout.join("")).toContain("| ⚠️ behind base |");
+  });
+
   it("returns READY for a green unreviewed PR with --until-ready", async () => {
     const reader = fakeReader({ facts: { reviewDecision: "REVIEW_REQUIRED" } });
     const harness = testRuntime(reader);

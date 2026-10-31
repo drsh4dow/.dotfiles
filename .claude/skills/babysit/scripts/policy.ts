@@ -206,7 +206,7 @@ export function gateReason(
 ): T.MergeGateReason | null {
   if (facts.isDraft && !allowDraft) return "draft-pr";
   if (facts.reviewDecision === "CHANGES_REQUESTED") return "changes-requested";
-  return null;
+  return facts.mergeStateStatus === "BEHIND" ? "behind-base" : null;
 }
 function gateBlocker(
   row: ReadinessRow,
