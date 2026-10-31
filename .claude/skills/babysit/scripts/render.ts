@@ -84,7 +84,7 @@ const gateActions: Record<T.MergeGateReason, string> = {
   "closed-without-merge": "restore or remove the closed PR from the queued stack",
   "draft-pr": "mark the PR ready for review before waiting for the merge queue",
   "changes-requested": "resolve the changes-requested review before waiting for the merge queue",
-  "behind-base": "merge the base into this branch and each branch above it, bottom up, in one worktree, then push fast-forwards; GitHub answers 403 to update-branch on a stacked PR",
+  "behind-base": "bring the branch up to date with its base, bottom PR first on a stack",
 };
 function renderBlocker(blocker: T.MergeBlocker | StatusQueryBlocker): string {
   switch (blocker.kind) {
