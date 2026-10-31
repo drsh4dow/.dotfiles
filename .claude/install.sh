@@ -8,7 +8,7 @@ set -euo pipefail
 src="$(cd "$(dirname "$0")" && pwd)"
 
 mkdir -p ~/.claude
-for f in settings.json keybindings.json CLAUDE.md skills commands agents hooks output-styles; do
+for f in settings.json keybindings.json CLAUDE.md skills commands agents hooks output-styles themes statusline.jq; do
   [ -e "$src/$f" ] || continue
   dst=~/.claude/$f
   if [ -e "$dst" ] && [ ! -L "$dst" ]; then
