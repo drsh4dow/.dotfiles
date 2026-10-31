@@ -8,6 +8,9 @@
   "permissions": {
     "defaultMode": "bypassPermissions"
   },
+  "env": {
+    "CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS": "40"
+  },
   "hooks": {
     "PreToolUse": [
       {
