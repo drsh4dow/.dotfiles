@@ -18,7 +18,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "sh \"${CLAUDE_CONFIG_DIR:-$HOME/.claude}/hooks/refuse-gh-pr-body-file.sh\"",
+            "command": "bash \"${CLAUDE_CONFIG_DIR:-$HOME/.claude}/hooks/refuse-gh-pr-body-file.sh\"",
             "timeout": 10
           }
         ]
