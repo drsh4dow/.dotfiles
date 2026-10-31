@@ -96,5 +96,6 @@
   "switchModelsOnFlag": false,
   "autoContinueAtUsageLimit": true,
   "fileCheckpointingEnabled": false,
-  "useAutoModeDuringPlan": false
+  "useAutoModeDuringPlan": false,
+  "spinnerTipsEnabled": false
 }
