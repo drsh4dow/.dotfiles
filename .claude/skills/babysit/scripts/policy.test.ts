@@ -3,7 +3,6 @@ import { WatcherQueryError } from "./github.ts";
 import {
   applyQueueSnapshot,
   assessGitHubMerge,
-  classifyPr,
   createQueueState,
   evaluateQueue,
   planQueue,
@@ -84,7 +83,7 @@ describe("readiness truth table", () => {
     expect(snapshot.kind).toBe("open");
     if (snapshot.kind !== "open") throw new Error("expected open snapshot");
     expect(snapshot.ci.kind).toBe("ci-github-rejected");
-    expect(classifyPr(snapshot)).toMatchObject({
+    expect(selectTierMajorStackDecision([snapshot])).toMatchObject({
       kind: "blocker",
       blocker: { kind: "failing-checks" },
     });
@@ -103,7 +102,7 @@ describe("readiness truth table", () => {
       pendingHistory: "omit",
       allowDraft: false,
     });
-    expect(classifyPr(row)).toMatchObject(decision);
+    expect(selectTierMajorStackDecision([row])).toMatchObject(decision);
     expect(renderStatusTable([row], "single")).toEndWith(`| ${cell} |\n`);
   });
 });
@@ -244,7 +243,7 @@ it("waits on a draft while checks are pending, then reports the draft gate", asy
     pendingHistory: "omit",
     allowDraft: false,
   });
-  expect(classifyPr(pending).kind).toBe("waiting");
+  expect(selectTierMajorStackDecision([pending]).kind).toBe("waiting");
 
   const settled = await readSnapshot({
     reader: fakeReader({ facts: { isDraft: true } }),
@@ -252,7 +251,7 @@ it("waits on a draft while checks are pending, then reports the draft gate", asy
     pendingHistory: "omit",
     allowDraft: false,
   });
-  expect(classifyPr(settled)).toMatchObject({
+  expect(selectTierMajorStackDecision([settled])).toMatchObject({
     kind: "blocker",
     blocker: { kind: "merge-gate", reason: "draft-pr" },
   });

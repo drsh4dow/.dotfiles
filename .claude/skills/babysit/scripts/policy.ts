@@ -274,15 +274,6 @@ export function readyContribution(
     },
   };
 }
-export function classifyPr(
-  row: T.PrSnapshot,
-  allowDraft = false
-): T.PrDecision {
-  const decision = selectTierMajorStackDecision([row], allowDraft, "single");
-  if (decision.kind !== "clear") return decision;
-  const pr = decision.prs[0];
-  return pr.kind === "merged-pr" ? { kind: "merged", pr } : { kind: "ready", pr };
-}
 export function selectTierMajorStackDecision(
   rows: T.NonEmpty<T.PrSnapshot>,
   allowDraft = false,
@@ -506,27 +497,11 @@ export async function runSimple(args: {
           args.mode
         )
       );
-    const decision =
-      args.mode === "single"
-        ? classifyPr(complete[0], args.options.allowDraft)
-        : selectTierMajorStackDecision(complete, args.options.allowDraft);
+    const decision = selectTierMajorStackDecision(complete, args.options.allowDraft, args.mode);
     if (decision.kind === "blocker")
       return {
         kind: "terminal",
         verdict: blockerVerdict(stamp, decision.blocker),
-      };
-    if (decision.kind === "ready" || decision.kind === "merged")
-      return {
-        kind: "terminal",
-        verdict: stamp(
-          {
-            kind: "READY",
-            terminal: true,
-            exitCode: 0,
-            scope: { kind: "single", pr: decision.pr },
-          },
-          args.mode
-        ),
       };
     if (decision.kind === "clear")
       return {
@@ -536,7 +511,10 @@ export async function runSimple(args: {
             kind: "READY",
             terminal: true,
             exitCode: 0,
-            scope: { kind: "stack", prs: decision.prs },
+            scope:
+              args.mode === "single"
+                ? { kind: "single", pr: decision.prs[0] }
+                : { kind: "stack", prs: decision.prs },
           },
           args.mode
         ),
