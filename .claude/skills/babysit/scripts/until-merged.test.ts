@@ -750,12 +750,19 @@ describe("blockers", () => {
     expect((await watch(scene, acks(first.items))).code).toBe(5);
   });
 
-  it("reports a branch behind its base instead of merge-ready", async () => {
+  it.each([
+    { mode: "a single PR", args: [], excerpt: "merge-gate on #1: behind-base" },
+    {
+      mode: "a merge queue",
+      args: ["--queued-stack", "--stack-prs", "1"],
+      excerpt: "#1 is merge-ready at head (reviewDecision=APPROVED); merging stays with the operator",
+    },
+  ])("reports a branch behind its base in $mode", async ({ args, excerpt }) => {
     const scene = world();
     scene.checks.set(1, passing);
     scene.facts.set(1, { mergeStateStatus: "BEHIND" });
-    const first = await watch(scene);
-    expect(first.items.map((item) => item.excerpt)).toEqual(["merge-gate on #1: behind-base"]);
+    const first = await watch(scene, args);
+    expect(first.items.map((item) => item.excerpt)).toEqual([excerpt]);
   });
 });
 

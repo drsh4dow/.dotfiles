@@ -66,6 +66,7 @@ interface Environment {
   readonly repository: T.Repository;
   readonly observedAt: string;
   readonly allowDraft: boolean;
+  readonly mode: T.WatchMode;
 }
 interface PrStep {
   pr: PrLedger;
@@ -458,7 +459,7 @@ function observeLifecycle(
     });
   else if (merge === "mergeable")
     setCondition(step, environment, "merge-conflicts", head, null);
-  const reason = gateReason(facts, environment.allowDraft);
+  const reason = gateReason(facts, environment.allowDraft, environment.mode);
   if (reason !== null || merge !== "unknown")
     setCondition(
       step,
@@ -512,7 +513,7 @@ function mergeReadyProof(
   facts: T.PullRequestFacts,
   ci: T.CiState,
   feedback: FeedbackSnapshot,
-  allowDraft: boolean
+  environment: Environment
 ): T.ReadyPr | null {
   if (!isCiClear(ci) || mergeability(facts) !== "mergeable") return null;
   if (feedback.threads.some((thread) => !thread.isResolved)) return null;
@@ -525,7 +526,8 @@ function mergeReadyProof(
       ci,
       reviewAutomationRunning: false,
     },
-    allowDraft
+    environment.allowDraft,
+    environment.mode
   );
   return ready?.kind === "ready-pr" ? ready : null;
 }
@@ -659,6 +661,7 @@ async function monitor(args: {
       repository,
       observedAt: clock.observedAt(),
       allowDraft: options.allowDraft,
+      mode: ledger.mode,
     };
     const poll: {
       worst: { readonly failure: T.QueryFailure; readonly count: number } | null;
@@ -748,7 +751,7 @@ async function monitor(args: {
       const ready =
         snapshot === null
           ? null
-          : mergeReadyProof(facts, ci, snapshot, options.allowDraft);
+          : mergeReadyProof(facts, ci, snapshot, environment);
       if (ready !== null)
         ledger = updateMember(ledger, number, (step) =>
           queueMergeReady(step, environment, facts.headRefOid, ready)

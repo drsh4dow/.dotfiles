@@ -45,18 +45,21 @@ const gateCells: Record<T.MergeGateReason, string> = {
   "changes-requested": "⚠️ changes requested",
   "behind-base": "⚠️ behind base",
 };
-function mergeCell(row: T.PrSnapshot): string {
+function mergeCell(row: T.PrSnapshot, mode: T.WatchMode): string {
   if (row.kind === "merged") return "✅ merged";
-  const reason = gateReason(row.facts, false);
+  const reason = gateReason(row.facts, false, mode);
   if (reason !== null) return gateCells[reason];
   return conflictBlocker(row) === null ? "✅" : "⚠️ conflict";
 }
-export function renderStatusTable(rows: T.NonEmpty<T.PrSnapshot>): string {
+export function renderStatusTable(
+  rows: T.NonEmpty<T.PrSnapshot>,
+  mode: T.WatchMode
+): string {
   const lines = ["| PR | CI | Review | Merge |", "| --- | --- | --- | --- |"];
   for (const row of rows) {
     const url = `https://github.com/${row.context.owner}/${row.context.repo}/pull/${row.context.number}`;
     lines.push(
-      `| [#${row.context.number}](${url}) | ${ciCell(row)} | ${reviewCell(row)} | ${mergeCell(row)} |`
+      `| [#${row.context.number}](${url}) | ${ciCell(row)} | ${reviewCell(row)} | ${mergeCell(row, mode)} |`
     );
   }
   return `${lines.join("\n")}\n`;
@@ -142,7 +145,7 @@ export function renderPretty(verdict: T.WatcherVerdict): string {
     case "QUEUE":
       return `QUEUE: captured ${verdict.queue.length} PR${verdict.queue.length === 1 ? "" : "s"} bottom-to-top: ${verdict.queue.map((pr) => `#${pr.number}`).join(",")}\n`;
     case "STATUS":
-      return renderStatusTable(verdict.rows);
+      return renderStatusTable(verdict.rows, verdict.mode);
     case "WAITING":
       return verdict.reason.kind === "pending-checks"
         ? `WAITING: frontier=#${verdict.frontier.number}; ${verdict.reason.pending.length} check${verdict.reason.pending.length === 1 ? "" : "s"} pending\n`

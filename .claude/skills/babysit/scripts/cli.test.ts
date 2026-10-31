@@ -326,7 +326,7 @@ describe("main", () => {
     });
   });
 
-  it("flags a branch behind its base", async () => {
+  it("flags a branch behind its base, except in a merge queue", async () => {
     const pr = ["--owner", "owner", "--repo", "repo", "--pr", "1"];
     const behind = () => testRuntime(fakeReader({ facts: { mergeStateStatus: "BEHIND" } }));
     const ready = behind();
@@ -334,9 +334,14 @@ describe("main", () => {
     expect(JSON.parse(ready.stdout[0] ?? "")).toMatchObject({
       blocker: { kind: "merge-gate", reason: "behind-base" },
     });
-    const status = behind();
-    await main([...pr, "--status-only", "--pretty"], status.runtime);
-    expect(status.stdout.join("")).toContain("| ⚠️ behind base |");
+    for (const [mode, cell] of [
+      [[], "⚠️ behind base"],
+      [["--queued-stack", "--stack-prs", "1"], "✅"],
+    ] as const) {
+      const status = behind();
+      await main([...pr, ...mode, "--status-only", "--pretty"], status.runtime);
+      expect(status.stdout.join("")).toEndWith(`| ${cell} |\n`);
+    }
   });
 
   it("returns READY for a green unreviewed PR with --until-ready", async () => {

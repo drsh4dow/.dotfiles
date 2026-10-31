@@ -175,6 +175,24 @@ it("scans stacks tier-major so an upstack conflict outranks frontier CI", async 
   });
 });
 
+it("gates a stack member behind its base, except in a merge queue", async () => {
+  const read = (number: number, facts: Partial<PullRequestFacts> = {}) =>
+    readSnapshot({
+      reader: fakeReader({ facts }),
+      context: context(number),
+      pendingHistory: "omit",
+      allowDraft: false,
+    });
+  const rows = [await read(60), await read(61, { mergeStateStatus: "BEHIND" })] as const;
+  expect(selectTierMajorStackDecision([...rows])).toMatchObject({
+    kind: "blocker",
+    blocker: { reason: "behind-base", pr: { number: 61 } },
+  });
+  let queue = createQueueState([rows[0].context, rows[1].context], 0);
+  for (const row of rows) queue = applyQueueSnapshot(queue, row, 0, options).state;
+  expect(evaluateQueue(queue, 0, options).kind).toBe("waiting");
+});
+
 it("attributes a stack wait to the PR whose checks are pending, not the bottom", async () => {
   const readyBottom = await readSnapshot({
     reader: fakeReader(),

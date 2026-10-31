@@ -202,19 +202,24 @@ const ciBlocker = (row: ReadinessRow): T.MergeBlocker | null =>
     : null;
 export function gateReason(
   facts: T.PullRequestFacts,
-  allowDraft: boolean
+  allowDraft: boolean,
+  mode: T.WatchMode
 ): T.MergeGateReason | null {
   if (facts.state === "CLOSED") return "closed-without-merge";
   if (facts.isDraft && !allowDraft) return "draft-pr";
   if (facts.reviewDecision === "CHANGES_REQUESTED") return "changes-requested";
-  return facts.mergeStateStatus === "BEHIND" ? "behind-base" : null;
+  // A merge queue merges onto the latest base itself, so the branch need not catch up.
+  if (facts.mergeStateStatus === "BEHIND" && mode !== "queued-stack")
+    return "behind-base";
+  return null;
 }
 function gateBlocker(
   row: ReadinessRow,
-  allowDraft: boolean
+  allowDraft: boolean,
+  mode: T.WatchMode
 ): T.MergeBlocker | null {
   if (row.kind === "merged") return null;
-  const reason = gateReason(row.facts, allowDraft);
+  const reason = gateReason(row.facts, allowDraft, mode);
   return reason === null ||
     (reason === "draft-pr" &&
       row.kind === "open" &&
@@ -224,7 +229,8 @@ function gateBlocker(
 }
 export function readyContribution(
   row: ReadinessRow,
-  allowDraft: boolean
+  allowDraft: boolean,
+  mode: T.WatchMode
 ): T.ReadyPr | T.MergedPr | null {
   if (row.kind === "merged")
     return {
@@ -237,7 +243,7 @@ export function readyContribution(
     !isCiClear(row.ci) ||
     row.threads.length !== 0 ||
     conflictBlocker(row) !== null ||
-    gateReason(row.facts, allowDraft) !== null
+    gateReason(row.facts, allowDraft, mode) !== null
   )
     return null;
   const reviewDecision = row.facts.reviewDecision;
@@ -265,12 +271,12 @@ export function classifyPr(
     conflictBlocker(row),
     threadBlocker(row),
     ciBlocker(row),
-    gateBlocker(row, allowDraft),
+    gateBlocker(row, allowDraft, "single"),
   ])
     if (blocker !== null) return { kind: "blocker", blocker };
   if (row.kind === "open" && row.ci.kind === "ci-pending")
     return { kind: "waiting", frontier: row.context, pending: row.ci.pending };
-  const ready = readyContribution(row, allowDraft);
+  const ready = readyContribution(row, allowDraft, "single");
   if (ready === null) throw new Error("snapshot has no classified decision");
   return ready.kind === "merged-pr"
     ? { kind: "merged", pr: ready }
@@ -278,7 +284,8 @@ export function classifyPr(
 }
 export function selectTierMajorStackDecision(
   rows: T.NonEmpty<T.PrSnapshot>,
-  allowDraft = false
+  allowDraft = false,
+  mode: T.WatchMode = "stack"
 ): T.StackDecision {
   for (const tier of [conflictBlocker, threadBlocker, ciBlocker])
     for (const row of rows) {
@@ -286,7 +293,7 @@ export function selectTierMajorStackDecision(
       if (blocker !== null) return { kind: "blocker", blocker };
     }
   for (const row of rows) {
-    const blocker = gateBlocker(row, allowDraft);
+    const blocker = gateBlocker(row, allowDraft, mode);
     if (blocker !== null) return { kind: "blocker", blocker };
   }
   for (const row of rows)
@@ -298,7 +305,7 @@ export function selectTierMajorStackDecision(
       };
   const prs = nonEmpty(
     rows
-      .map((row) => readyContribution(row, allowDraft))
+      .map((row) => readyContribution(row, allowDraft, mode))
       .filter((row): row is T.ReadyPr | T.MergedPr => row !== null)
   );
   if (prs === null || prs.length !== rows.length)
@@ -708,7 +715,7 @@ export function evaluateQueue(
   }
   const rows = nonEmpty(active);
   if (rows === null) throw new Error("active queue cannot be empty");
-  const decision = selectTierMajorStackDecision(rows, options.allowDraft);
+  const decision = selectTierMajorStackDecision(rows, options.allowDraft, "queued-stack");
   if (decision.kind === "blocker")
     return { kind: "blocker", state, blocker: decision.blocker };
   const frontier = rows[0].context;
