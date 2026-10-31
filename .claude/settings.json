@@ -20,6 +20,11 @@
             "type": "command",
             "command": "bash \"${CLAUDE_CONFIG_DIR:-$HOME/.claude}/hooks/refuse-gh-pr-body-file.sh\"",
             "timeout": 10
+          },
+          {
+            "type": "command",
+            "command": "python3 \"${CLAUDE_CONFIG_DIR:-$HOME/.claude}/hooks/refuse-cpu-burners.py\"",
+            "timeout": 10
           }
         ]
       }
