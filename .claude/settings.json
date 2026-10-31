@@ -60,6 +60,16 @@
     "pstack@cursor-plugins": true,
     "skills-for-real-engineers@anthropic-plugin-directory": true
   },
+  "skillOverrides": {
+    "anthropic-skills:xlsx": "off",
+    "anthropic-skills:skill-creator": "off",
+    "anthropic-skills:pptx": "off",
+    "anthropic-skills:pdf": "off",
+    "anthropic-skills:morning": "off",
+    "anthropic-skills:import-memory": "off",
+    "anthropic-skills:google-workspace": "off",
+    "anthropic-skills:docx": "off"
+  },
   "extraKnownMarketplaces": {
     "cursor-plugins": {
       "source": {
