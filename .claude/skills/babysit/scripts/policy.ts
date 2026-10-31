@@ -182,9 +182,7 @@ export type ReadinessRow =
   | Extract<T.PrSnapshot, { readonly kind: "merged" | "closed" }>
   | Omit<Extract<T.PrSnapshot, { readonly kind: "open" }>, "reviewPasses">;
 /** GitHub reports UNKNOWN while it recomputes mergeability, which is no evidence either way. */
-export function mergeability(
-  facts: T.PullRequestFacts
-): "conflicting" | "mergeable" | "unknown" {
+export function mergeability(facts: T.PullRequestFacts): T.Mergeability {
   if (facts.mergeable === "UNKNOWN" || facts.mergeStateStatus === "UNKNOWN")
     return "unknown";
   if (

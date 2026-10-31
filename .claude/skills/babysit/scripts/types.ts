@@ -197,6 +197,7 @@ export type MergeGateReason =
   | "draft-pr"
   | "changes-requested"
   | "behind-base";
+export type Mergeability = "conflicting" | "mergeable" | "unknown";
 export type MergeBlocker =
   | {
       readonly kind: "merge-conflicts";

@@ -45,7 +45,11 @@ const gateCells: Record<T.MergeGateReason, string> = {
   "changes-requested": "⚠️ changes requested",
   "behind-base": "⚠️ behind base",
 };
-const mergeCells = { conflicting: "⚠️ conflict", mergeable: "✅", unknown: "⏳ unknown" };
+const mergeCells: Record<T.Mergeability, string> = {
+  conflicting: "⚠️ conflict",
+  mergeable: "✅",
+  unknown: "⏳ unknown",
+};
 function mergeCell(row: T.PrSnapshot, mode: T.WatchMode): string {
   if (row.kind === "merged") return "✅ merged";
   const reason = gateReason(row.facts, false, mode);
@@ -148,11 +152,11 @@ export function renderPretty(verdict: T.WatcherVerdict): string {
     case "STATUS":
       return renderStatusTable(verdict.rows, verdict.mode);
     case "WAITING":
+      if (verdict.reason.kind === "pending-checks")
+        return `WAITING: frontier=#${verdict.frontier.number}; ${verdict.reason.pending.length} check${verdict.reason.pending.length === 1 ? "" : "s"} pending\n`;
       if (verdict.reason.kind === "mergeability-unknown")
         return `WAITING: frontier=#${verdict.frontier.number}; GitHub is still computing mergeability\n`;
-      return verdict.reason.kind === "pending-checks"
-        ? `WAITING: frontier=#${verdict.frontier.number}; ${verdict.reason.pending.length} check${verdict.reason.pending.length === 1 ? "" : "s"} pending\n`
-        : `WAITING: frontier=#${verdict.frontier.number} is blocker-free; waiting for merge queue (${verdict.reason.unmergedCount} PR${verdict.reason.unmergedCount === 1 ? "" : "s"} unmerged)\n`;
+      return `WAITING: frontier=#${verdict.frontier.number} is blocker-free; waiting for merge queue (${verdict.reason.unmergedCount} PR${verdict.reason.unmergedCount === 1 ? "" : "s"} unmerged)\n`;
     case "ADVANCE":
       return `ADVANCE: merged #${verdict.merged.number}; next=#${verdict.frontier.number}; remaining=${verdict.remaining}\n`;
     case "RETRY":
