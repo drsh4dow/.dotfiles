@@ -267,20 +267,10 @@ export function classifyPr(
   row: T.PrSnapshot,
   allowDraft = false
 ): T.PrDecision {
-  for (const blocker of [
-    conflictBlocker(row),
-    threadBlocker(row),
-    ciBlocker(row),
-    gateBlocker(row, allowDraft, "single"),
-  ])
-    if (blocker !== null) return { kind: "blocker", blocker };
-  if (row.kind === "open" && row.ci.kind === "ci-pending")
-    return { kind: "waiting", frontier: row.context, pending: row.ci.pending };
-  const ready = readyContribution(row, allowDraft, "single");
-  if (ready === null) throw new Error("snapshot has no classified decision");
-  return ready.kind === "merged-pr"
-    ? { kind: "merged", pr: ready }
-    : { kind: "ready", pr: ready };
+  const decision = selectTierMajorStackDecision([row], allowDraft, "single");
+  if (decision.kind !== "clear") return decision;
+  const pr = decision.prs[0];
+  return pr.kind === "merged-pr" ? { kind: "merged", pr } : { kind: "ready", pr };
 }
 export function selectTierMajorStackDecision(
   rows: T.NonEmpty<T.PrSnapshot>,
