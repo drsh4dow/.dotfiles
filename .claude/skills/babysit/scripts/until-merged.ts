@@ -459,13 +459,14 @@ function observeLifecycle(
   else if (merge === "mergeable")
     setCondition(step, environment, "merge-conflicts", head, null);
   const reason = gateReason(facts, environment.allowDraft);
-  setCondition(
-    step,
-    environment,
-    "merge-gate",
-    head,
-    reason === null ? null : { kind: "merge-gate", pr: facts.context, reason }
-  );
+  if (reason !== null || merge !== "unknown")
+    setCondition(
+      step,
+      environment,
+      "merge-gate",
+      head,
+      reason === null ? null : { kind: "merge-gate", pr: facts.context, reason }
+    );
 }
 
 async function readCi(

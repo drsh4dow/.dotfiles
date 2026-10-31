@@ -1532,20 +1532,28 @@ describe("blockers come from the lane that read them", () => {
 });
 
 describe("non-observations do not flap", () => {
-  it("wakes once while GitHub alternates CONFLICTING and UNKNOWN on one head", async () => {
+  it.each([
+    {
+      blocked: { mergeable: "CONFLICTING", mergeStateStatus: "DIRTY" },
+      excerpt: "merge-conflicts on #1: CONFLICTING; DIRTY",
+    },
+    { blocked: { mergeStateStatus: "BEHIND" }, excerpt: "merge-gate on #1: behind-base" },
+  ] as const)("wakes once while GitHub alternates $blocked.mergeStateStatus and UNKNOWN on one head", async ({
+    blocked,
+    excerpt,
+  }) => {
     const scene = world();
     scene.checks.set(1, passing);
-    const conflicting = { mergeable: "CONFLICTING", mergeStateStatus: "DIRTY" } as const;
     const unknown = { mergeable: "UNKNOWN", mergeStateStatus: "UNKNOWN" } as const;
     const wakes: string[][] = [];
     let ack: string[] = [];
-    for (const facts of [conflicting, unknown, conflicting, unknown, conflicting]) {
+    for (const facts of [blocked, unknown, blocked, unknown, blocked]) {
       scene.facts.set(1, facts);
       const result = await watch(scene, ack);
       wakes.push(result.items.map((item) => item.excerpt));
       ack = acks(result.items);
     }
-    expect(wakes).toEqual([["merge-conflicts on #1: CONFLICTING; DIRTY"], [], [], [], []]);
+    expect(wakes).toEqual([[excerpt], [], [], [], []]);
   });
 
   it("wakes once for a draft whose CI reruns on the same head", async () => {
