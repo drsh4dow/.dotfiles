@@ -42,6 +42,13 @@ const options = {
   maxQueryErrors: 5,
   allowDraft: false,
 } satisfies PollingOptions;
+const read = (number: number, fake: FakeReaderOptions = {}) =>
+  readSnapshot({
+    reader: fakeReader(fake),
+    context: context(number),
+    pendingHistory: "omit",
+    allowDraft: false,
+  });
 
 describe("readiness truth table", () => {
   it("covers every specified row and every UNKNOWN rollup value", () => {
@@ -97,12 +104,7 @@ describe("readiness truth table", () => {
     ["UNKNOWN", "DIRTY", "⏳ unknown", waiting],
     ["CONFLICTING", "DIRTY", "⚠️ conflict", { kind: "blocker", blocker: { kind: "merge-conflicts" } }],
   ] as const)("reads mergeable=%s mergeStateStatus=%s as merge cell %s", async (mergeable, mergeStateStatus, cell, decision) => {
-    const row = await readSnapshot({
-      reader: fakeReader({ facts: { mergeable, mergeStateStatus } }),
-      context: context(1),
-      pendingHistory: "omit",
-      allowDraft: false,
-    });
+    const row = await read(1, { facts: { mergeable, mergeStateStatus } });
     expect(selectTierMajorStackDecision([row])).toMatchObject(decision);
     expect(renderStatusTable([row], "single")).toEndWith(`| ${cell} |\n`);
   });
@@ -171,21 +173,11 @@ describe("snapshot query planning", () => {
 });
 
 it("scans stacks tier-major so an upstack conflict outranks frontier CI", async () => {
-  const frontier = await readSnapshot({
-    reader: fakeReader({
-      fastPath: { kind: "checks", checks: [failedCheck()] },
-      commitRollups: [{ oid: "head", state: "FAILURE" }],
-    }),
-    context: context(10),
-    pendingHistory: "omit",
-    allowDraft: false,
+  const frontier = await read(10, {
+    fastPath: { kind: "checks", checks: [failedCheck()] },
+    commitRollups: [{ oid: "head", state: "FAILURE" }],
   });
-  const upstack = await readSnapshot({
-    reader: fakeReader({ facts: { mergeable: "CONFLICTING" } }),
-    context: context(11),
-    pendingHistory: "omit",
-    allowDraft: false,
-  });
+  const upstack = await read(11, { facts: { mergeable: "CONFLICTING" } });
   const decision = selectTierMajorStackDecision([frontier, upstack]);
   expect(decision).toMatchObject({
     kind: "blocker",
@@ -193,13 +185,6 @@ it("scans stacks tier-major so an upstack conflict outranks frontier CI", async 
   });
 });
 
-const read = (number: number, options: FakeReaderOptions = {}) =>
-  readSnapshot({
-    reader: fakeReader(options),
-    context: context(number),
-    pendingHistory: "omit",
-    allowDraft: false,
-  });
 it("gates a stack member behind its base, except in a merge queue", async () => {
   const rows = [await read(60), await read(61, { facts: { mergeStateStatus: "BEHIND" } })] as const;
   expect(selectTierMajorStackDecision([...rows])).toMatchObject({
@@ -233,23 +218,13 @@ it.each<[string, FakeReaderOptions, FakeReaderOptions]>([
 });
 
 it("waits on a draft while checks are pending, then reports the draft gate", async () => {
-  const pending = await readSnapshot({
-    reader: fakeReader({
-      facts: { isDraft: true },
-      fastPath: { kind: "checks", checks: [pendingCheck()] },
-    }),
-    context: context(12),
-    pendingHistory: "omit",
-    allowDraft: false,
+  const pending = await read(12, {
+    facts: { isDraft: true },
+    fastPath: { kind: "checks", checks: [pendingCheck()] },
   });
   expect(selectTierMajorStackDecision([pending]).kind).toBe("waiting");
 
-  const settled = await readSnapshot({
-    reader: fakeReader({ facts: { isDraft: true } }),
-    context: context(12),
-    pendingHistory: "omit",
-    allowDraft: false,
-  });
+  const settled = await read(12, { facts: { isDraft: true } });
   expect(selectTierMajorStackDecision([settled])).toMatchObject({
     kind: "blocker",
     blocker: { kind: "merge-gate", reason: "draft-pr" },
@@ -257,15 +232,6 @@ it("waits on a draft while checks are pending, then reports the draft gate", asy
 });
 
 describe("queued-stack cadence", () => {
-  async function openSnapshot(pr: PrContext) {
-    return readSnapshot({
-      reader: fakeReader(),
-      context: pr,
-      pendingHistory: "omit",
-      allowDraft: false,
-    });
-  }
-
   it("drops a sweep head only after its snapshot succeeds", async () => {
     const queue = [
       context(20),
@@ -273,13 +239,13 @@ describe("queued-stack cadence", () => {
       context(22),
     ] satisfies NonEmpty<PrContext>;
     let state = createQueueState(queue, 0);
-    const first = await openSnapshot(queue[0]);
+    const first = await read(queue[0].number);
     state = applyQueueSnapshot(state, first, 0, options).state;
     expect(state.work).toMatchObject({
       kind: "whole-stack-sweep",
       remaining: [{ number: 21 }, { number: 22 }],
     });
-    const second = await openSnapshot(queue[1]);
+    const second = await read(queue[1].number);
     state = applyQueueSnapshot(state, second, 60, options).state;
     expect(state.work).toMatchObject({
       kind: "whole-stack-sweep",
@@ -351,7 +317,7 @@ describe("queued-stack cadence", () => {
     let state = createQueueState(queue, 0);
     const first = applyQueueSnapshot(
       state,
-      await openSnapshot(queue[0]),
+      await read(queue[0].number),
       0,
       options
     );
@@ -359,7 +325,7 @@ describe("queued-stack cadence", () => {
     state = first.state;
     const second = applyQueueSnapshot(
       state,
-      await openSnapshot(queue[1]),
+      await read(queue[1].number),
       5,
       options
     );
@@ -432,7 +398,7 @@ describe("queued-stack cadence", () => {
     let state = createQueueState(queue, 0);
     state = applyQueueSnapshot(
       state,
-      await openSnapshot(queue[0]),
+      await read(queue[0].number),
       0,
       options
     ).state;
