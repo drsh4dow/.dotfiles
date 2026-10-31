@@ -274,6 +274,11 @@ export function readyContribution(
     },
   };
 }
+function waitReason(row: T.PrSnapshot): T.WaitReason | null {
+  if (row.kind !== "open") return null;
+  if (row.ci.kind === "ci-pending") return { kind: "pending-checks", pending: row.ci.pending };
+  return mergeability(row.facts) === "unknown" ? { kind: "mergeability-unknown" } : null;
+}
 export function selectTierMajorStackDecision(
   rows: T.NonEmpty<T.PrSnapshot>,
   allowDraft = false,
@@ -289,12 +294,8 @@ export function selectTierMajorStackDecision(
     if (blocker !== null) return { kind: "blocker", blocker };
   }
   for (const row of rows) {
-    if (row.kind !== "open") continue;
-    const frontier = row.context;
-    if (row.ci.kind === "ci-pending")
-      return { kind: "waiting", frontier, reason: { kind: "pending-checks", pending: row.ci.pending } };
-    if (mergeability(row.facts) === "unknown")
-      return { kind: "waiting", frontier, reason: { kind: "mergeability-unknown" } };
+    const reason = waitReason(row);
+    if (reason !== null) return { kind: "waiting", frontier: row.context, reason };
   }
   const prs = nonEmpty(
     rows
@@ -662,9 +663,7 @@ export type QueueEvaluation =
       readonly kind: "waiting";
       readonly state: QueueState;
       readonly frontier: T.PrContext;
-      readonly reason:
-        | Extract<T.WaitReason, { readonly kind: "pending-checks" }>
-        | { readonly kind: "merge-queue"; readonly unmergedCount: number };
+      readonly reason: Extract<T.ProgressVerdict, { readonly kind: "WAITING" }>["reason"];
       readonly emit: boolean;
     };
 export function evaluateQueue(
@@ -711,17 +710,14 @@ export function evaluateQueue(
       frontier,
       unmergedCount: active.length,
     };
-  const row = rows[0];
-  const pending =
-    row.kind === "open" && row.ci.kind === "ci-pending" ? row.ci.pending : null;
-  const reason =
-    pending === null
-      ? ({ kind: "merge-queue", unmergedCount: active.length } as const)
-      : ({ kind: "pending-checks", pending } as const);
+  // Report only the frontier's own wait, because an upstack PR's wait does not block its merge.
+  const reason = waitReason(rows[0]) ?? ({ kind: "merge-queue", unmergedCount: active.length } as const);
   const key =
     reason.kind === "pending-checks"
       ? `pending:${frontier.number}:${reason.pending.length}`
-      : `queue:${frontier.number}:${reason.unmergedCount}`;
+      : reason.kind === "mergeability-unknown"
+        ? `unknown:${frontier.number}`
+        : `queue:${frontier.number}:${reason.unmergedCount}`;
   return {
     kind: "waiting",
     state: { ...state, frontier, lastWaitKey: key },

@@ -222,6 +222,16 @@ it.each<[string, FakeReaderOptions, object]>([
   expect(decision).toMatchObject({ kind: "waiting", frontier: { number: 21 }, reason });
 });
 
+it.each<[string, FakeReaderOptions, FakeReaderOptions]>([
+  ["mergeability-unknown", { facts: { mergeable: "CONFLICTING", mergeStateStatus: "UNKNOWN" } }, {}],
+  ["merge-queue", {}, pendingUpstack],
+])("waits on a queued frontier as %s, from its own state only", async (kind, bottom, upstack) => {
+  const rows = [await read(70, bottom), await read(71, upstack)];
+  let queue = createQueueState([context(70), context(71)], 0);
+  for (const row of rows) queue = applyQueueSnapshot(queue, row, 0, options).state;
+  expect(evaluateQueue(queue, 0, options)).toMatchObject({ kind: "waiting", frontier: { number: 70 }, reason: { kind } });
+});
+
 it("waits on a draft while checks are pending, then reports the draft gate", async () => {
   const pending = await readSnapshot({
     reader: fakeReader({
