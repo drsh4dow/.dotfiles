@@ -45,6 +45,7 @@ import {
 } from "./monitor-verdict.ts";
 import {
   classifyCi,
+  gateReason,
   isCiClear,
   mergeAssessment,
   queryBackoffSeconds,
@@ -417,15 +418,6 @@ function mergeability(
   )
     return "conflicting";
   return "mergeable";
-}
-
-function gateReason(
-  facts: T.PullRequestFacts,
-  allowDraft: boolean
-): T.MergeGateReason | null {
-  if (facts.isDraft && !allowDraft) return "draft-pr";
-  if (facts.reviewDecision === "CHANGES_REQUESTED") return "changes-requested";
-  return null;
 }
 
 const isMerged = (facts: T.PullRequestFacts): boolean =>
