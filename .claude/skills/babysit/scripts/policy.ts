@@ -181,11 +181,22 @@ export async function readSnapshot(args: {
 export type ReadinessRow =
   | Extract<T.PrSnapshot, { readonly kind: "merged" | "closed" }>
   | Omit<Extract<T.PrSnapshot, { readonly kind: "open" }>, "reviewPasses">;
-export const conflictBlocker = (row: ReadinessRow): T.MergeBlocker | null =>
-  row.kind === "open" &&
-  (row.facts.mergeable === "CONFLICTING" ||
-    row.facts.mergeStateStatus === "DIRTY" ||
-    row.facts.mergeStateStatus === "CONFLICTING")
+/** GitHub reports UNKNOWN while it recomputes mergeability, which is no evidence either way. */
+export function mergeability(
+  facts: T.PullRequestFacts
+): "conflicting" | "mergeable" | "unknown" {
+  if (facts.mergeable === "UNKNOWN" || facts.mergeStateStatus === "UNKNOWN")
+    return "unknown";
+  if (
+    facts.mergeable === "CONFLICTING" ||
+    facts.mergeStateStatus === "DIRTY" ||
+    facts.mergeStateStatus === "CONFLICTING"
+  )
+    return "conflicting";
+  return "mergeable";
+}
+const conflictBlocker = (row: ReadinessRow): T.MergeBlocker | null =>
+  row.kind === "open" && mergeability(row.facts) === "conflicting"
     ? { kind: "merge-conflicts", pr: row.context, facts: row.facts }
     : null;
 function threadBlocker(row: ReadinessRow): T.MergeBlocker | null {
@@ -242,7 +253,7 @@ export function readyContribution(
     row.kind !== "open" ||
     !isCiClear(row.ci) ||
     row.threads.length !== 0 ||
-    conflictBlocker(row) !== null ||
+    mergeability(row.facts) !== "mergeable" ||
     gateReason(row.facts, allowDraft, mode) !== null
   )
     return null;
@@ -286,13 +297,14 @@ export function selectTierMajorStackDecision(
     const blocker = gateBlocker(row, allowDraft, mode);
     if (blocker !== null) return { kind: "blocker", blocker };
   }
-  for (const row of rows)
-    if (row.kind === "open" && row.ci.kind === "ci-pending")
-      return {
-        kind: "waiting",
-        frontier: row.context,
-        pending: row.ci.pending,
-      };
+  for (const row of rows) {
+    if (row.kind !== "open") continue;
+    const frontier = row.context;
+    if (row.ci.kind === "ci-pending")
+      return { kind: "waiting", frontier, reason: { kind: "pending-checks", pending: row.ci.pending } };
+    if (mergeability(row.facts) === "unknown")
+      return { kind: "waiting", frontier, reason: { kind: "mergeability-unknown" } };
+  }
   const prs = nonEmpty(
     rows
       .map((row) => readyContribution(row, allowDraft, mode))
@@ -534,7 +546,7 @@ export async function runSimple(args: {
         kind: "WAITING",
         terminal: false,
         frontier: decision.frontier,
-        reason: { kind: "pending-checks", pending: decision.pending },
+        reason: decision.reason,
       })
     );
     return {
@@ -545,7 +557,7 @@ export async function runSimple(args: {
           kind: "TIMEOUT",
           terminal: true,
           exitCode: 5,
-          reason: { kind: "pending-checks", pending: decision.pending },
+          reason: decision.reason,
         }),
     };
   };
@@ -673,10 +685,7 @@ export type QueueEvaluation =
       readonly state: QueueState;
       readonly frontier: T.PrContext;
       readonly reason:
-        | {
-            readonly kind: "pending-checks";
-            readonly pending: T.NonEmpty<T.PendingCheck>;
-          }
+        | Extract<T.WaitReason, { readonly kind: "pending-checks" }>
         | { readonly kind: "merge-queue"; readonly unmergedCount: number };
       readonly emit: boolean;
     };

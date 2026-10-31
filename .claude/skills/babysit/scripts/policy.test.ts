@@ -18,6 +18,7 @@ import {
   passingCheck,
   pendingCheck,
 } from "./fakes.test-helper.ts";
+import { renderStatusTable } from "./render.ts";
 import type {
   GitHubReader,
   NonEmpty,
@@ -87,6 +88,23 @@ describe("readiness truth table", () => {
       kind: "blocker",
       blocker: { kind: "failing-checks" },
     });
+  });
+
+  const waiting = { kind: "waiting", reason: { kind: "mergeability-unknown" } } as const;
+  it.each([
+    ["UNKNOWN", "UNKNOWN", "⏳ unknown", waiting],
+    ["CONFLICTING", "UNKNOWN", "⏳ unknown", waiting],
+    ["UNKNOWN", "DIRTY", "⏳ unknown", waiting],
+    ["CONFLICTING", "DIRTY", "⚠️ conflict", { kind: "blocker", blocker: { kind: "merge-conflicts" } }],
+  ] as const)("reads mergeable=%s mergeStateStatus=%s as merge cell %s", async (mergeable, mergeStateStatus, cell, decision) => {
+    const row = await readSnapshot({
+      reader: fakeReader({ facts: { mergeable, mergeStateStatus } }),
+      context: context(1),
+      pendingHistory: "omit",
+      allowDraft: false,
+    });
+    expect(classifyPr(row)).toMatchObject(decision);
+    expect(renderStatusTable([row], "single")).toEndWith(`| ${cell} |\n`);
   });
 });
 
@@ -212,7 +230,7 @@ it("attributes a stack wait to the PR whose checks are pending, not the bottom",
   expect(decision).toMatchObject({
     kind: "waiting",
     frontier: { number: 21 },
-    pending: [{ name: "upstack-build" }],
+    reason: { pending: [{ name: "upstack-build" }] },
   });
 });
 

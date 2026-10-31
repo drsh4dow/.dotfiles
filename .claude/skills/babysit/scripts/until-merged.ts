@@ -48,6 +48,7 @@ import {
   gateReason,
   isCiClear,
   mergeAssessment,
+  mergeability,
   queryBackoffSeconds,
   readyContribution,
   type WatchClock,
@@ -406,21 +407,6 @@ function setCondition(
   });
 }
 
-/** GitHub reports UNKNOWN while it recomputes mergeability, which is no evidence either way. */
-function mergeability(
-  facts: T.PullRequestFacts
-): "conflicting" | "mergeable" | "unknown" {
-  if (facts.mergeable === "UNKNOWN" || facts.mergeStateStatus === "UNKNOWN")
-    return "unknown";
-  if (
-    facts.mergeable === "CONFLICTING" ||
-    facts.mergeStateStatus === "DIRTY" ||
-    facts.mergeStateStatus === "CONFLICTING"
-  )
-    return "conflicting";
-  return "mergeable";
-}
-
 const isMerged = (facts: T.PullRequestFacts): boolean =>
   facts.state === "MERGED" || facts.mergedAt !== null;
 
@@ -515,7 +501,6 @@ function mergeReadyProof(
   feedback: FeedbackSnapshot,
   environment: Environment
 ): T.ReadyPr | null {
-  if (!isCiClear(ci) || mergeability(facts) !== "mergeable") return null;
   if (feedback.threads.some((thread) => !thread.isResolved)) return null;
   const ready = readyContribution(
     {

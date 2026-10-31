@@ -367,6 +367,30 @@ describe("main", () => {
     });
   });
 
+  it("waits while GitHub computes mergeability, then returns READY with --until-ready", async () => {
+    const base = fakeReader();
+    let reads = 0;
+    const reader: GitHubReader = {
+      ...base,
+      async pullRequest(context) {
+        const facts = await base.pullRequest(context);
+        reads += 1;
+        return reads === 1 ? { ...facts, mergeable: "UNKNOWN", mergeStateStatus: "UNKNOWN" } : facts;
+      },
+    };
+    const harness = testRuntime(reader);
+    const clock = { ...harness.runtime.clock, async sleep() {} };
+    const code = await main(
+      ["--owner", "owner", "--repo", "repo", "--pr", "1", "--until-ready"],
+      { ...harness.runtime, clock }
+    );
+    expect(code).toBe(0);
+    expect(harness.stdout.map((line) => JSON.parse(line))).toMatchObject([
+      { kind: "WAITING", reason: { kind: "mergeability-unknown" } },
+      { kind: "READY" },
+    ]);
+  });
+
   const noChecks = {
     fastPath: {
       kind: "unusable",

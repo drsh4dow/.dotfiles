@@ -1,4 +1,4 @@
-import { conflictBlocker, gateReason } from "./policy.ts";
+import { gateReason, mergeability } from "./policy.ts";
 import type * as T from "./types.ts";
 export const renderJson = (verdict: T.WatcherVerdict): string =>
   `${JSON.stringify(verdict)}\n`;
@@ -45,11 +45,12 @@ const gateCells: Record<T.MergeGateReason, string> = {
   "changes-requested": "⚠️ changes requested",
   "behind-base": "⚠️ behind base",
 };
+const mergeCells = { conflicting: "⚠️ conflict", mergeable: "✅", unknown: "⏳ unknown" };
 function mergeCell(row: T.PrSnapshot, mode: T.WatchMode): string {
   if (row.kind === "merged") return "✅ merged";
   const reason = gateReason(row.facts, false, mode);
   if (reason !== null) return gateCells[reason];
-  return conflictBlocker(row) === null ? "✅" : "⚠️ conflict";
+  return mergeCells[mergeability(row.facts)];
 }
 export function renderStatusTable(
   rows: T.NonEmpty<T.PrSnapshot>,
@@ -147,6 +148,8 @@ export function renderPretty(verdict: T.WatcherVerdict): string {
     case "STATUS":
       return renderStatusTable(verdict.rows, verdict.mode);
     case "WAITING":
+      if (verdict.reason.kind === "mergeability-unknown")
+        return `WAITING: frontier=#${verdict.frontier.number}; GitHub is still computing mergeability\n`;
       return verdict.reason.kind === "pending-checks"
         ? `WAITING: frontier=#${verdict.frontier.number}; ${verdict.reason.pending.length} check${verdict.reason.pending.length === 1 ? "" : "s"} pending\n`
         : `WAITING: frontier=#${verdict.frontier.number} is blocker-free; waiting for merge queue (${verdict.reason.unmergedCount} PR${verdict.reason.unmergedCount === 1 ? "" : "s"} unmerged)\n`;
@@ -170,6 +173,8 @@ export function renderPretty(verdict: T.WatcherVerdict): string {
         return "TIMEOUT: checks still pending\n";
       if (verdict.reason.kind === "status-unavailable")
         return "TIMEOUT: GitHub status remained unavailable\n";
+      if (verdict.reason.kind === "mergeability-unknown")
+        return "TIMEOUT: GitHub never finished computing mergeability\n";
       return `TIMEOUT: queued stack still has ${verdict.reason.unmergedCount} PR${verdict.reason.unmergedCount === 1 ? "" : "s"} unmerged; frontier=#${verdict.reason.frontier.number}\n`;
     default: {
       const exhaustive: never = verdict;
