@@ -181,7 +181,7 @@ export async function readSnapshot(args: {
 export type ReadinessRow =
   | Extract<T.PrSnapshot, { readonly kind: "merged" | "closed" }>
   | Omit<Extract<T.PrSnapshot, { readonly kind: "open" }>, "reviewPasses">;
-const conflictBlocker = (row: ReadinessRow): T.MergeBlocker | null =>
+export const conflictBlocker = (row: ReadinessRow): T.MergeBlocker | null =>
   row.kind === "open" &&
   (row.facts.mergeable === "CONFLICTING" ||
     row.facts.mergeStateStatus === "DIRTY" ||
@@ -204,6 +204,7 @@ export function gateReason(
   facts: T.PullRequestFacts,
   allowDraft: boolean
 ): T.MergeGateReason | null {
+  if (facts.state === "CLOSED") return "closed-without-merge";
   if (facts.isDraft && !allowDraft) return "draft-pr";
   if (facts.reviewDecision === "CHANGES_REQUESTED") return "changes-requested";
   return facts.mergeStateStatus === "BEHIND" ? "behind-base" : null;
@@ -213,8 +214,7 @@ function gateBlocker(
   allowDraft: boolean
 ): T.MergeBlocker | null {
   if (row.kind === "merged") return null;
-  const reason =
-    row.kind === "closed" ? "closed-without-merge" : gateReason(row.facts, allowDraft);
+  const reason = gateReason(row.facts, allowDraft);
   return reason === null ||
     (reason === "draft-pr" &&
       row.kind === "open" &&

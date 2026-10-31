@@ -1,3 +1,4 @@
+import { conflictBlocker, gateReason } from "./policy.ts";
 import type * as T from "./types.ts";
 export const renderJson = (verdict: T.WatcherVerdict): string =>
   `${JSON.stringify(verdict)}\n`;
@@ -38,18 +39,17 @@ function reviewCell(row: T.PrSnapshot): string {
   );
   return `${threadsCell(row)}${passes.join("")}`;
 }
+const gateCells: Record<T.MergeGateReason, string> = {
+  "closed-without-merge": "❌ closed",
+  "draft-pr": "⏸ draft",
+  "changes-requested": "⚠️ changes requested",
+  "behind-base": "⚠️ behind base",
+};
 function mergeCell(row: T.PrSnapshot): string {
   if (row.kind === "merged") return "✅ merged";
-  if (row.kind === "closed") return "❌ closed";
-  if (row.facts.isDraft) return "⏸ draft";
-  if (row.facts.reviewDecision === "CHANGES_REQUESTED")
-    return "⚠️ changes requested";
-  if (row.facts.mergeStateStatus === "BEHIND") return "⚠️ behind base";
-  return row.facts.mergeable === "CONFLICTING" ||
-    row.facts.mergeStateStatus === "DIRTY" ||
-    row.facts.mergeStateStatus === "CONFLICTING"
-    ? "⚠️ conflict"
-    : "✅";
+  const reason = gateReason(row.facts, false);
+  if (reason !== null) return gateCells[reason];
+  return conflictBlocker(row) === null ? "✅" : "⚠️ conflict";
 }
 export function renderStatusTable(rows: T.NonEmpty<T.PrSnapshot>): string {
   const lines = ["| PR | CI | Review | Merge |", "| --- | --- | --- | --- |"];
