@@ -1,6 +1,6 @@
 ---
 name: writing-good-prs
-description: Write or update a pull request title and body that a reviewer can trust and own. Use when opening a PR, editing or refreshing a live PR's body, filling its placeholders, or posting or updating its evidence comment.
+description: Write or update a pull request title and body that a reviewer can trust and own. Use when opening a PR, editing a live PR's body, or posting or editing its evidence comment.
 disable-model-invocation: false
 user-invocable: false
 ---
