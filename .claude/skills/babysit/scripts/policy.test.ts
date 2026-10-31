@@ -16,6 +16,7 @@ import {
   failedCheck,
   passingCheck,
   pendingCheck,
+  type FakeReaderOptions,
 } from "./fakes.test-helper.ts";
 import { renderStatusTable } from "./render.ts";
 import type {
@@ -192,15 +193,15 @@ it("scans stacks tier-major so an upstack conflict outranks frontier CI", async 
   });
 });
 
+const read = (number: number, options: FakeReaderOptions = {}) =>
+  readSnapshot({
+    reader: fakeReader(options),
+    context: context(number),
+    pendingHistory: "omit",
+    allowDraft: false,
+  });
 it("gates a stack member behind its base, except in a merge queue", async () => {
-  const read = (number: number, facts: Partial<PullRequestFacts> = {}) =>
-    readSnapshot({
-      reader: fakeReader({ facts }),
-      context: context(number),
-      pendingHistory: "omit",
-      allowDraft: false,
-    });
-  const rows = [await read(60), await read(61, { mergeStateStatus: "BEHIND" })] as const;
+  const rows = [await read(60), await read(61, { facts: { mergeStateStatus: "BEHIND" } })] as const;
   expect(selectTierMajorStackDecision([...rows])).toMatchObject({
     kind: "blocker",
     blocker: { reason: "behind-base", pr: { number: 61 } },
@@ -210,27 +211,15 @@ it("gates a stack member behind its base, except in a merge queue", async () => 
   expect(evaluateQueue(queue, 0, options).kind).toBe("waiting");
 });
 
-it("attributes a stack wait to the PR whose checks are pending, not the bottom", async () => {
-  const readyBottom = await readSnapshot({
-    reader: fakeReader(),
-    context: context(20),
-    pendingHistory: "omit",
-    allowDraft: false,
-  });
-  const pendingUpstack = await readSnapshot({
-    reader: fakeReader({
-      fastPath: { kind: "checks", checks: [pendingCheck("upstack-build")] },
-    }),
-    context: context(21),
-    pendingHistory: "omit",
-    allowDraft: false,
-  });
-  const decision = selectTierMajorStackDecision([readyBottom, pendingUpstack]);
-  expect(decision).toMatchObject({
-    kind: "waiting",
-    frontier: { number: 21 },
-    reason: { pending: [{ name: "upstack-build" }] },
-  });
+const pendingUpstack: FakeReaderOptions = {
+  fastPath: { kind: "checks", checks: [pendingCheck("upstack-build")] },
+};
+it.each<[string, FakeReaderOptions, object]>([
+  ["pending-checks", pendingUpstack, { kind: "pending-checks", pending: [{ name: "upstack-build" }] }],
+  ["mergeability-unknown", { facts: { mergeStateStatus: "UNKNOWN" } }, { kind: "mergeability-unknown" }],
+])("attributes a stack's %s wait to the waiting PR, not the bottom", async (_, upstack, reason) => {
+  const decision = selectTierMajorStackDecision([await read(20), await read(21, upstack)]);
+  expect(decision).toMatchObject({ kind: "waiting", frontier: { number: 21 }, reason });
 });
 
 it("waits on a draft while checks are pending, then reports the draft gate", async () => {
