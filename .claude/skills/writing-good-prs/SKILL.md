@@ -7,7 +7,7 @@ user-invocable: false
 
 # Writing good PRs
 
-A PR has two readers. The reviewer reads the body as a one-minute briefing before the diff: why the change exists, what changed, what it leaves out, what it could break, and how you proved it works. The body follows the Descriptions rules of pstack's Opening a PR playbook (`~/.claude/plugins/marketplaces/cursor-plugins/harness/pstack/claude-code/skills/poteto-mode/playbooks/opening-a-pr.md`), and it becomes the squash commit body. The second reader is an expert in the field who must own the change after it merges. What they need beyond the briefing goes in one evidence comment that the body links.
+A PR has two readers. The reviewer reads the body as a one-minute briefing before the diff: why the change exists, what changed, what it leaves out, what it could break, and how you proved it works. The body follows the Descriptions rules of pstack's Opening a PR playbook (`~/.claude/plugins/marketplaces/cursor-plugins/harness/pstack/claude-code/skills/poteto-mode/playbooks/opening-a-pr.md`). The second reader is an expert in the field who must own the change after it merges. What they need beyond the briefing goes in one evidence comment that the body links.
 
 The test: from the body and the evidence comment alone, without cloning the branch, that expert can retell the problem and the reason for the fix, and finds every question they would ask about the proof answered.
 
