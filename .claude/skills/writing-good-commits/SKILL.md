@@ -9,7 +9,7 @@ user-invocable: false
 
 A commit message is what a maintainer reads in `git log`, `git blame`, and `git bisect` months later, with no PR or chat beside it. The subject names the change. The body says why the change was needed.
 
-Edit the prose with the **unslop** skill: read `~/.claude/plugins/marketplaces/cursor-plugins/pstack/skills/unslop/SKILL.md` in full and apply it.
+Edit the prose with the **unslop** skill: read `~/.claude/plugins/marketplaces/cursor-plugins/harness/pstack/claude-code/skills/unslop/SKILL.md` in full and apply it.
 
 ## Size
 

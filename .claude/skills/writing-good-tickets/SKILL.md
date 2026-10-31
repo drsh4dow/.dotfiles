@@ -9,7 +9,7 @@ user-invocable: false
 
 A ticket hands one problem to someone who was not in the conversation, a developer or an agent, who takes it to one PR. It answers, in order: what goes wrong today and for whom, what shows it, how anyone will know it is fixed, and what to read before starting. The closing PR proves each `## Done when` item with a witness, per the **writing-good-prs** skill.
 
-Edit the prose with the **unslop** skill: read `~/.claude/plugins/marketplaces/cursor-plugins/pstack/skills/unslop/SKILL.md` in full and apply it. Follow the repository's tracker and template conventions, starting from its issue tracker record, `docs/agents/issue-tracker.md`, when it has one. When the repository has an issue template, fill its sections and apply the rules below to the section that plays each role.
+Edit the prose with the **unslop** skill: read `~/.claude/plugins/marketplaces/cursor-plugins/harness/pstack/claude-code/skills/unslop/SKILL.md` in full and apply it. Follow the repository's tracker and template conventions, starting from its issue tracker record, `docs/agents/issue-tracker.md`, when it has one. When the repository has an issue template, fill its sections and apply the rules below to the section that plays each role.
 
 Everything the ticket points at is reachable by any developer with access to the repository: issues, PRs, CI runs, hosted media, and public URLs. Paths on your machine, such as your home directory, `/tmp`, a worktree, or an agent state folder, are reachable only by you. Paste what they hold instead. Say "on main" or name the released version where you saw it, rather than a commit hash.
 
