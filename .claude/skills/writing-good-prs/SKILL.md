@@ -186,7 +186,7 @@ Write the body to a file and run both gates.
 
    Run this read yourself even when you run as a subagent, and publish only after it has run. Only when your session has no Agent tool, write the files, publish nothing, and name the read in your report for your parent to run.
 
-Publish the same file with `scripts/publish-pr.ts create <body-file> --title "<title>"` or `scripts/publish-pr.ts edit <number> <body-file> --title "<title>"`, never with a bare `gh pr create --body-file` or `gh pr edit --body-file`. Both verbs take `--repo` and `--template`, and `create` also takes `--base` and `--head`. Keep the title out of the body file.
+Publish the same file with `scripts/publish-pr.ts create <body-file> --title "<title>"` or `scripts/publish-pr.ts edit <number> <body-file> --title "<title>"`, never with a bare `gh pr create --body-file` or `gh pr edit --body-file`. Both verbs take `--repo` and `--template`, and `create` also takes `--base`, `--head`, and `--draft`, which opens the PR as a draft. Keep the title out of the body file.
 
 - It reruns check-body and calls `gh` only after check-body exits 0.
 - On `edit`, it keeps each `## ` section that the live body has and the file lacks, such as a plan a bot appended, after the section it followed in the live body, and prints `publish-pr: kept "## <heading>" from the live body` for each. If you deleted that section on purpose, say so in your report.

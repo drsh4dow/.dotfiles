@@ -11,7 +11,7 @@ const { tmpdir } = process.getBuiltinModule("node:os");
 const { dirname, join } = process.getBuiltinModule("node:path");
 
 type Target =
-  | { kind: "create"; base: string | undefined; head: string | undefined }
+  | { kind: "create"; base: string | undefined; head: string | undefined; draft: boolean }
   | { kind: "edit"; number: string };
 
 type Arguments = {
@@ -33,12 +33,12 @@ class Failure {
 }
 
 const usage =
-  "expected create <body-file> --title <title> [--base <branch>] [--head <branch>] [--repo <owner/repo>] [--template <file>], " +
+  "expected create <body-file> --title <title> [--draft] [--base <branch>] [--head <branch>] [--repo <owner/repo>] [--template <file>], " +
   "or edit <number> <body-file> --title <title> [--repo <owner/repo>] [--template <file>], " +
   "or comment <number> <comment-file> [--repo <owner/repo>]";
 
 const optionsFor = {
-  create: ["--title", "--base", "--head", "--repo", "--template"],
+  create: ["--title", "--draft", "--base", "--head", "--repo", "--template"],
   edit: ["--title", "--repo", "--template"],
 } as const;
 
@@ -58,14 +58,17 @@ function parseArguments(argv: readonly string[]): Arguments | Failure {
   const allowed: readonly string[] = optionsFor[verb];
   const options = new Map<string, string>();
 
-  for (let index = 0; index < words.length; index += 2) {
-    const [name, value] = [words[index], words[index + 1]];
+  for (let index = 0; index < words.length; ) {
+    const name = words[index];
+    const takesValue = name !== "--draft";
+    const value = takesValue ? words[index + 1] : "";
 
     if (!allowed.includes(name) || value === undefined || options.has(name)) {
       return new Failure(usage);
     }
 
     options.set(name, value);
+    index += takesValue ? 2 : 1;
   }
 
   const title = options.get("--title");
@@ -75,7 +78,12 @@ function parseArguments(argv: readonly string[]): Arguments | Failure {
   const target: Target =
     verb === "edit"
       ? { kind: "edit", number: number ?? "" }
-      : { kind: "create", base: options.get("--base"), head: options.get("--head") };
+      : {
+          kind: "create",
+          base: options.get("--base"),
+          head: options.get("--head"),
+          draft: options.has("--draft"),
+        };
 
   return {
     target,
@@ -320,7 +328,12 @@ function publish(args: Arguments, draft: string): number {
     const verb =
       target.kind === "edit"
         ? ["edit", target.number]
-        : ["create", ...flag("--base", target.base), ...flag("--head", target.head)];
+        : [
+            "create",
+            ...flag("--base", target.base),
+            ...flag("--head", target.head),
+            ...(target.draft ? ["--draft"] : []),
+          ];
 
     const output = gh([
       "pr",
