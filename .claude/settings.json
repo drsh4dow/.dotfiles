@@ -25,6 +25,11 @@
             "type": "command",
             "command": "python3 \"${CLAUDE_CONFIG_DIR:-$HOME/.claude}/hooks/refuse-cpu-burners.py\"",
             "timeout": 10
+          },
+          {
+            "type": "command",
+            "command": "python3 \"${CLAUDE_CONFIG_DIR:-$HOME/.claude}/hooks/refuse-unslotted-heavy-runs.py\"",
+            "timeout": 10
           }
         ]
       }
