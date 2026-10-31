@@ -11,7 +11,7 @@ const { tmpdir } = process.getBuiltinModule("node:os");
 const { dirname, join } = process.getBuiltinModule("node:path");
 
 type Target =
-  | { kind: "create"; base: string | undefined; head: string | undefined; draft: boolean }
+  | { kind: "create"; base: string | undefined; head: string | undefined; isDraft: boolean }
   | { kind: "edit"; number: string };
 
 type Arguments = {
@@ -82,7 +82,7 @@ function parseArguments(argv: readonly string[]): Arguments | Failure {
           kind: "create",
           base: options.get("--base"),
           head: options.get("--head"),
-          draft: options.has("--draft"),
+          isDraft: options.has("--draft"),
         };
 
   return {
@@ -332,7 +332,7 @@ function publish(args: Arguments, draft: string): number {
             "create",
             ...flag("--base", target.base),
             ...flag("--head", target.head),
-            ...(target.draft ? ["--draft"] : []),
+            ...(target.isDraft ? ["--draft"] : []),
           ];
 
     const output = gh([
