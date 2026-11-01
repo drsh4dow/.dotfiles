@@ -11,7 +11,8 @@ the voice says its first word, heard by a local speech recognizer.
     sync.py --self-test
 
 Captions: every frame's caption box (timeline caption_box) is decoded from the export and reduced to 8x8
-block means. A caption appears where the box's pixels change; the timeline only says which caption should
+block means. With no caption_box and soft subtitles (timeline "subtitles"), each cue's start is read from the
+export's own subtitle track instead. A caption appears where the box's pixels change; the timeline only says which caption should
 appear near which time (within WINDOW s), never what time to report. A change back to the empty box (a frame
 the timeline marks caption-free) is a hide, not a show.
 Words: faster-whisper (WHISPER_MODEL, default small.en; CPU, int8) transcribes the export's audio with word
@@ -66,6 +67,18 @@ def show_events(cells: np.ndarray, blank: np.ndarray | None) -> list[int]:
     return out
 
 
+def cue_starts(video: Path) -> list[float]:
+    """Start times of the export's first subtitle track (mov_text), read from the file, not from the plan."""
+    srt = subprocess.run(["ffmpeg", "-v", "error", "-i", str(video), "-map", "0:s:0", "-f", "srt", "-"],
+                         capture_output=True, text=True).stdout
+    if not srt.strip():
+        raise SystemExit(f"sync.py: {video} has no subtitle track to measure")
+    out = []
+    for h, m, sec, ms in re.findall(r"(\d+):(\d+):(\d+)[,.](\d+) -->", srt):
+        out.append(int(h) * 3600 + int(m) * 60 + int(sec) + int(ms) / 1000)
+    return out
+
+
 def audio(video: Path) -> np.ndarray | None:
     if not _media.probe(video)["audio"]:
         return None
@@ -102,13 +115,16 @@ def run(timeline: Path, video: Path | None, out: Path, limit: float, words_file:
     tl = _media.Timeline(timeline)
     video = video or tl.video
     caps, box = tl.d.get("captions", []), tl.d.get("caption_box")
-    if not caps or not box:
-        raise SystemExit("sync.py: the timeline has no captions or no caption_box")
-    cells = band_cells(video, box)
-    fps, nfr = tl.fps, len(cells)
-    free = [f for f in range(nfr) if not any(c["show"] <= f / fps < c["hide"] for c in caps)]
-    blank = cells[free[len(free) // 2]] if free else None
-    events = show_events(cells, blank)
+    if not caps or not (box or tl.d.get("subtitles")):
+        raise SystemExit("sync.py: the timeline has no captions, or neither a caption_box nor subtitles")
+    fps = tl.fps
+    if box:
+        cells = band_cells(video, box)
+        free = [f for f in range(len(cells)) if not any(c["show"] <= f / fps < c["hide"] for c in caps)]
+        blank = cells[free[len(free) // 2]] if free else None
+        events, where = show_events(cells, blank), f"pixels of {box}"
+    else:
+        events, where = [round(t * fps) for t in cue_starts(video)], "the export's own subtitle track"
     first, used = {}, -1
     for i, c in enumerate(caps):
         cand = [f for f in events if f > used and abs(f / fps - c["show"]) <= WINDOW]
@@ -160,7 +176,7 @@ def run(timeline: Path, video: Path | None, out: Path, limit: float, words_file:
     worst = max(scored, key=lambda r: abs(r["offset"])) if scored else None
     f = lambda v: "—" if v is None else f"{v:.3f}"  # noqa: E731
     g = lambda v: "—" if v is None else f"{v:+.3f}"  # noqa: E731
-    md = ["# Caption sync on the export", "", f"Video: {video}. Words: {source}. Captions: pixels of {box}.", "",
+    md = ["# Caption sync on the export", "", f"Video: {video}. Words: {source}. Captions: {where}.", "",
           f"Captions found in the pixels: {len(rows) - len(missing)} of {len(rows)}. Scored: {len(scored)}; "
           f"not measured: {len(rows) - len(scored)}; over {limit} s: {len(over)}.",
           f"Caption words heard in order: {agree} of {len(exp)} ({100 * agree / max(1, len(exp)):.1f} %), spelling "
@@ -207,6 +223,23 @@ def self_test() -> int:
             (d / f"{name}.json").write_text(json.dumps(tl))
             return run(d / f"{name}.json", None, d / name, 0.3, d / "words.json")[0]
 
+        def soft(name, shown):
+            fps = 30
+            _media.write_video(d / f"{name}.mp4", (np.full((360, 640, 3), 240, np.uint8) for _ in range(180)), 640, 360, fps)
+            st = lambda t: f"00:00:{int(t):02d},{int(round(t % 1 * 1000)):03d}"  # noqa: E731
+            (d / f"{name}.srt").write_text("".join(f"{i}\n{st(a)} --> {st(b)}\n{t}\n\n" for i, (t, a, b) in enumerate(shown, 1)))
+            subprocess.run(["ffmpeg", "-v", "error", "-y", "-i", str(d / f"{name}.mp4"), "-i", str(d / f"{name}.srt"),
+                            "-map", "0", "-map", "1", "-c", "copy", "-c:s", "mov_text", str(d / f"{name}-s.mp4")], check=True)
+            tl = {"video": str(d / f"{name}-s.mp4"), "fps": fps, "canvas": [640, 360], "total": 6.0, "caption_box": None,
+                  "subtitles": str(d / f"{name}.srt"), "shots": [],
+                  "captions": [{"text": t, "show": s, "hide": e} for t, s, e in caps]}
+            (d / f"{name}.json").write_text(json.dumps(tl))
+            return run(d / f"{name}.json", None, d / name, 0.3, d / "words.json")[0]
+
+        if not soft("soft-ontime", caps):
+            fails.append("soft subtitles on their words failed")
+        if soft("soft-late", [caps[0], ("Bravo two.", 2.6, 3.4), caps[2]]):
+            fails.append("a soft subtitle 0.6 s late passed")
         if not export("ontime", caps):
             fails.append("captions shown on their words failed")
         if export("late", [caps[0], ("Bravo two.", 2.6, 3.4), caps[2]]):

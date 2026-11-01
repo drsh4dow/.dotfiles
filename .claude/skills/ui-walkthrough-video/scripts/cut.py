@@ -15,7 +15,8 @@ EDIT.json (paths relative to it; every box is [x, y, w, h] in canvas pixels unle
     {"out": "cut.mp4", "fps": 30, "canvas": [1920, 1080], "background": [226, 232, 240],
      "page": {"slot": [200, 8, 1520, 950], "scale": null},  # null: the largest scale that fits every take
      "frame": {"color": [100, 116, 139], "width": 2},        # optional outline around the slot
-     "caption_box": [0, 962, 1920, 118], "caption_size": 34, "caption_rows": 2,
+     "caption_box": [0, 962, 1920, 118], "caption_size": 34, "caption_rows": 2,   # null: nothing burned in
+     "subtitles": false,                  # true: captions as a mov_text track in the mp4 and an .srt beside it
      "chip_box": [1730, 20, 180, 48],                         # where "N s later" goes; null when no chips
      "labels": [{"box": [8, 20, 184, 40], "text": "Chapter 1", "t0": 0, "t1": 9}],
      "font": null,                                            # default: the skill's fonts/Inter-Regular.ttf
@@ -266,13 +267,12 @@ class Cut:
             self.lines.append(line)
             prev_end = line["end"]
         self.captions = []
-        if self.e.get("caption_box"):
+        if self.e.get("caption_box") or self.e.get("subtitles"):
             d = ImageDraw.Draw(Image.new("RGB", (8, 8)))
-            bx, by, bw, bh = self.e["caption_box"]
             rows = int(self.e.get("caption_rows", 2))
             for ln in self.lines:
                 for c in chunks_of(ln["text"], word_times(ln, ln["clip"]), int(self.e.get("caption_chars", 90))):
-                    if len(wrap(d, c["text"], self.f_cap, bw - 80)) > rows:
+                    if self.e.get("caption_box") and len(wrap(d, c["text"], self.f_cap, self.e["caption_box"][2] - 80)) > rows:
                         raise EditError(f"caption wraps past {rows} rows: '{c['text'][:60]}'; cut words")
                     self.captions.append(c | {"show": max(0.0, c["start"] - CAPTION_LEAD)})
             # a caption hides at the next one's show time, so an old caption's tail never holds the next one back
@@ -295,7 +295,8 @@ class Cut:
         return img
 
     def words_layer(self, t: float) -> tuple[tuple, Image.Image | None]:
-        cap = next((i for i, c in enumerate(self.captions) if c["show"] <= t < c["hide"]), None)
+        cap = None if not self.e.get("caption_box") else next(
+            (i for i, c in enumerate(self.captions) if c["show"] <= t < c["hide"]), None)
         chip = next((i for i, c in enumerate(self.chips) if c["t0"] <= t < c["t1"]), None)
         labels = tuple(i for i, lb in enumerate(self.e.get("labels", [])) if lb.get("t0", 0) <= t < lb.get("t1", 1e9))
         key = (cap, chip, labels)
@@ -415,6 +416,7 @@ class Cut:
                 "scale": self.scale, "slot": self.slot,
                 "shots": [{k: v for k, v in s.items() if k != "_tk"} for s in self.shots],
                 "marks": self.marks, "caption_box": self.e.get("caption_box"),
+                "subtitles": str(self.out.with_suffix(".srt")) if self.e.get("subtitles") else None,
                 "captions": [{k: c[k] for k in ("text", "show", "hide")} for c in self.captions],
                 "chips": self.chips,
                 "lines": [{"text": ln["text"], "say": ln["say"], "start": ln["start"], "end": ln["end"]} for ln in self.lines]}
@@ -424,11 +426,25 @@ class Cut:
             wav = Path(tmp) / "narration.wav"
             self.narration(wav)
             _media.write_video(self.out, self.frames(), self.W, self.H, self.fps, audio=wav)
+        if self.e.get("subtitles"):
+            self.mux_subtitles()
         (self.out.parent / "timeline.json").write_text(json.dumps(self.timeline(), indent=1))
         fmt = lambda t: f"{int(t // 60)}:{t % 60:05.2f}"  # noqa: E731
         rows = [f"# {self.out.name} transcript", "", "| Start | End | Line |", "| --- | --- | --- |"]
         rows += [f"| {fmt(ln['start'])} | {fmt(ln['end'])} | {ln['text']} |" for ln in self.lines]
         (self.out.parent / "transcript.md").write_text("\n".join(rows) + "\n")
+
+    def mux_subtitles(self) -> None:
+        """Captions as a toggleable mov_text track in the mp4 plus an .srt beside it; nothing burned in."""
+        stamp = lambda t: f"{int(t // 3600):02d}:{int(t % 3600 // 60):02d}:{int(t % 60):02d},{int(round(t % 1 * 1000)) % 1000:03d}"  # noqa: E731
+        srt = self.out.with_suffix(".srt")
+        srt.write_text("".join(f"{i}\n{stamp(c['show'])} --> {stamp(c['hide'])}\n{c['text']}\n\n"
+                               for i, c in enumerate(self.captions, 1)))
+        tmp = self.out.with_suffix(".subs.mp4")
+        subprocess.run(["ffmpeg", "-v", "error", "-y", "-i", str(self.out), "-i", str(srt), "-map", "0", "-map", "1",
+                        "-c", "copy", "-c:s", "mov_text", "-metadata:s:s:0", "language=eng", "-disposition:s:0",
+                        "default", "-movflags", "+faststart", str(tmp)], check=True)
+        tmp.replace(self.out)
 
     def still(self, t: float) -> Path:
         shot = next((s for s in self.shots if t < s["out1"]), self.shots[-1])
@@ -511,6 +527,18 @@ def self_test() -> int:
                                capture_output=True, text=True)
             if r.returncode != 0:
                 fails.append(f"{script} exit {r.returncode}: {r.stdout[-600:]}{r.stderr[-600:]}")
+        full = dict(edit, out="full.mp4", canvas=[640, 400], page={"slot": [0, 0, 640, 400], "scale": 1.0}, frame=None,
+                    caption_box=None, chip_box=None, labels=[], subtitles=True,
+                    shots=[dict(edit["shots"][0], pieces=[{"play": [0, 6]}])])
+        ep.write_text(json.dumps(full))
+        Cut(ep).render()
+        subs = subprocess.run(["ffprobe", "-v", "error", "-select_streams", "s", "-show_entries", "stream=codec_name",
+                               "-of", "csv=p=0", str(d / "full.mp4")], capture_output=True, text=True).stdout.split()
+        srt = (d / "full.srt").read_text() if (d / "full.srt").exists() else ""
+        if subs[:1] != ["mov_text"] or "A synthetic page." not in srt or "00:00:00,150 -->" not in srt:
+            fails.append(f"soft subtitles: streams {subs}, srt {srt[:80]!r}")
+        if json.loads((d / "timeline.json").read_text())["scale"] != 1.0:
+            fails.append("a full-canvas slot at scale 1.0 did not keep native pixels")
         bad = dict(edit, caption_box=[0, 400, 960, 200])
         ep.write_text(json.dumps(bad))
         try:

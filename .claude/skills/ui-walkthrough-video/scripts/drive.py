@@ -18,6 +18,8 @@ CLI:
     drive.py preflight --session S --out DIR [--width 1440 --height 900]   # 2 s test take: is the window painting?
     drive.py --self-test
 
+page_match: the URL substring of the tab that wheel scrolls go to. Empty means this session's current tab URL.
+
 events.json: {"take", "width", "height", "fps", "recorded_at" (UTC), "events": [{"t", "kind", ...}],
 "provenance": {"states", "writes"}}. t is seconds since `record start`. Logs hold coordinates, labels, lengths
 and IDs, never typed text. Pointer moves are eased (--human) and take 280-900 ms; typing is per character,
@@ -29,6 +31,7 @@ from __future__ import annotations
 import datetime as dt
 import json
 import random
+import re
 import subprocess
 import sys
 import time
@@ -190,9 +193,17 @@ class Take:
         time.sleep(0.1)
         self.ab("mouse", "up")
 
+    def wheel_target(self) -> str:
+        """The URL substring cdp.mjs wheel matches: page_match, else this session's own tab. An empty match would
+        pick the browser's first tab, which in a shared browser is often another agent's."""
+        match = self.page_match or self.ab("get", "url")
+        if not match:
+            raise RuntimeError("no page to wheel: set page_match or open a page in this session first")
+        return match
+
     def wheel(self, dy: int, steps: int) -> None:
         ws = self.ab("get", "cdp-url")
-        r = subprocess.run(["node", str(HERE / "cdp.mjs"), "wheel", "--ws", ws, "--match", self.page_match,
+        r = subprocess.run(["node", str(HERE / "cdp.mjs"), "wheel", "--ws", ws, "--match", self.wheel_target(),
                             "--x", str(self.mouse[0]), "--y", str(self.mouse[1]), "--dy", str(dy), "--steps", str(steps)],
                            capture_output=True, text=True, timeout=60)
         if r.returncode != 0:
@@ -238,6 +249,11 @@ class Take:
         raise TimeoutError(label)
 
 
+def frame_count(printed: str) -> int:
+    """ffprobe's nb_read_frames as csv: ffprobe 9 prints "43," where older ones print "43"."""
+    return int((re.findall(r"\d+", printed) or ["0"])[0])
+
+
 def preflight(session: str, out: Path, width: int, height: int) -> int:
     """Record 2 s while moving the pointer; fail when the window is not painting."""
     t = Take("preflight", session, out, width, height)
@@ -256,7 +272,7 @@ def preflight(session: str, out: Path, width: int, height: int) -> int:
                              "stream=nb_read_frames", "-of", "csv=p=0", str(mp4)], capture_output=True, text=True).stdout.strip()
     frozen = subprocess.run(["ffmpeg", "-hide_banner", "-nostats", "-i", str(mp4), "-vf", "freezedetect=n=-60dB:d=1.5",
                              "-f", "null", "-"], capture_output=True, text=True).stderr
-    n = int(frames or 0)
+    n = frame_count(frames)
     ok = n >= 15 and "freeze_start" not in frozen
     print(f"preflight: {'PASS' if ok else 'FAIL'}, {n} frames, pointer motion {'seen' if 'freeze_start' not in frozen else 'NOT seen'}"
           f" in {mp4}")
@@ -318,6 +334,24 @@ def self_test() -> int:
             fails.append("event times go backwards")
         if ["wheel", 400, 20] not in calls:
             fails.append("scroll did not wheel at the pointer")
+
+    def fake_url(args):
+        return R("https://app.example.test/mine\n") if args[2:4] == ["get", "url"] else R()
+
+    with tempfile.TemporaryDirectory() as tmp:
+        if Take("t2", "s", tmp, runner=fake_url).wheel_target() != "https://app.example.test/mine":
+            fails.append("an empty page_match did not default to the session's own tab")
+        if Take("t3", "s", tmp, page_match="other", runner=fake_url).wheel_target() != "other":
+            fails.append("page_match was ignored")
+        try:
+            Take("t4", "s", tmp, runner=lambda a: R()).wheel_target()
+            fails.append("a session with no page and no page_match was allowed to wheel")
+        except RuntimeError:
+            pass
+    for printed, want in (("43,", 43), ("43", 43), ("", 0)):
+        got = frame_count(printed)
+        if got != want:
+            fails.append(f"ffprobe frame count {printed!r} parsed as {got}, want {want}")
     print("drive.py self-test: " + ("PASS" if not fails else "FAIL\n  " + "\n  ".join(fails)))
     return 0 if not fails else 1
 

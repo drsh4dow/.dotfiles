@@ -17,6 +17,8 @@ These came from the user's complaints. Each rule cost a round of rework the firs
 
 - **Real use, good pacing, a separate watcher.** "I want good pacing, not pauses in between, I want real user behavior, and I want a pleasant visualization of the real thing, a subagent must also watch it before claim is ready to correct anything, viusal verification in UI work is paramount". So: a visible pointer, human typing and wheel scrolling, and no dead air (no span over 1.0 s that is both frozen and silent). Backend waits become jump cuts.
 - **The whole page, always.** "ok I hate it, it should display the full page, like wtf, Why would it shows the zoom in thing? that is not clear". The page shows each take's whole viewport at one fixed scale and place. Never zoom, pan or crop it. Captions and labels sit outside the page.
+- **The full browser window, at native pixels.** "the browser view should be complete, the full browser, not a zoom in that looks like shit." When the video shows a web app, record the whole browser window (tabs, address bar and page) at the OS level, sized to fill the frame (1920x1080 including the chrome), and cut it at scale 1.0 with nothing around it. No upscaling, no rail, no slot smaller than the frame. Captions go in a toggleable subtitle track (`"subtitles": true`), not burned in. If a check can only run on burned-in captions, add a band below the window; never shrink the window to make room. [`scripts/window.py`](scripts/window.py) records and drives such a window.
+- **Voice first, live at 1.0×.** "also the pacing is awful." Render the narration first, then drive the browser live at 1.0×, timed to the lines, so each action lands as its words are spoken. No speed ramps and no freeze holds. The only cuts are clean jump cuts over real backend waits. Pointer and typing move at natural human speed, and the beats breathe.
 - **Proof over polish.** "do not worry about it, I care more about the real product proof rather than the quality of the video itself." Then: "I love the video, what are the issues that are blocking you?" A false or unshown claim blocks the cut. Polish never does, and the user's approval of a cut ends polishing.
 - **One clear file.** "give me the full path of the video", then "what is the difference? which one is the newest and best?" See Handoff.
 
@@ -34,6 +36,7 @@ A project can add its own recording rules, such as which accounts, environments 
 - **The browser.** Use an agent-owned Chromium: a headless `agent-browser --session NAME`, or the shared agent browser when the project defines one. Never use the user's daily browser.
 - **One take per beat.** Each take is one mp4 of one tab at a fixed viewport, plus an `events.json` on the same clock. The recorder follows the active tab, so a second tab gets its own take. Set the viewport and inject the mask before `record start`. Any change to either needs a new take.
 - **The driver.** [`scripts/drive.py`](scripts/drive.py) is an importable `Take` class. It gives eased pointer moves, per-character typing, real wheel scrolls at the pointer, and DOM-box `mark`s an edit can outline later. Its `wait_until` is logged so the edit can jump-cut the wait. Use `with take:` so a failing step still stops the recorder and keeps the log. Without it, a crash left the recorder running and the mp4 had no index.
+- **A full-window take.** [`scripts/window.py`](scripts/window.py) runs Xvfb and a headed Chromium on its own profile, so it never captures the user's desktop. Its `WindowTake` is `Take` with an ffmpeg x11grab recorder and xdotool pointer, wheel and keys, and it logs every box in window pixels. Prove a new setup on a 5 s test clip before any take, and check one frame shows the tabs, the address bar and the pointer. Sign the window in by copying the site's cookies from a signed-in agent browser over CDP. Its self-test proves the events clock matches the frames within 0.1 s: x264's lookahead once held the frame counter back and put every event 1.1 s ahead of its picture. `hscroll` sends a sideways wheel (X buttons 6 and 7) for wide boards. A column or list that renders lazily the first time it scrolls into view showed skeletons for 1.5 s on camera: scroll it into view and back once before `record start`.
 - **Preflight.** `drive.py preflight --session S --out DIR` records 2 s of pointer motion. It fails when the window is not painting.
 - **Raw CDP.** [`scripts/cdp.mjs`](scripts/cdp.mjs):
   - `wheel` scrolls at the pointer. agent-browser's `mouse wheel` fires at 0,0.
@@ -51,7 +54,7 @@ A project can add its own recording rules, such as which accounts, environments 
   - It writes `timeline.json` and `transcript.md`. `--still T` renders one composed frame for a layout review.
   - It exits 2 when an edit breaks a rule.
 - **Your own cutter.** Have it write the same `timeline.json` (contract in [`scripts/_media.py`](scripts/_media.py)) and every check still runs.
-- **Pacing.** Anchor each line to the take second it describes. Hold or speed up the picture (up to about 1.5×) so the voice and the action stay together, and leave typing on screen long enough to read. Measure the quiet gaps on the export.
+- **Pacing.** Voice first: voice the lines, lay them back to back with short natural gaps (the quiet-gap check allows 0.5 s between lines), and schedule each take action at its line's start plus the offset of the word that names it. Then the cut plays the take at 1.0× from end to end, and its pieces skip only backend waits. Leave typing on screen long enough to read. Measure the quiet gaps on the export.
 - **Voice (optional).** [`scripts/tts.py`](scripts/tts.py) calls ElevenLabs with timestamps and caches each line by hash. The voice and model are the `ELEVEN_VOICE` and `ELEVEN_MODEL` constants at the top of `tts.py`. `ELEVENLABS_VOICE_ID` overrides the voice. A rebuild with `--offline` cannot re-voice by accident. With no voice, give each line a `dur` and the video is captions only.
 
 ## What may be drawn over the page
@@ -73,7 +76,7 @@ Measure the file the user will watch, never the edit plan. Captions once "passed
 | Dead air, loudness, quiet gaps, contact sheets | `check.sh VIDEO --timeline T` | a span over 1.0 s both frozen and silent; a quiet span over 0.5 s between lines or 0.6 s inside one |
 | Whole viewport, one scale | `framing.py T` | any sampled frame that a 1.1× zoom or an 8 px shift matches better; takes at different scales |
 | Overlay allowlist | `overlays.py T` | a foreign tile outside the marks; a tinted outline interior; a self-test the detector misses |
-| Caption sync | `HF_HUB_OFFLINE=1 sync.py T` | a caption's first frame more than 0.3 s from its first spoken word; a caption that never shows |
+| Caption sync | `HF_HUB_OFFLINE=1 sync.py T` | a caption's first frame (or soft-subtitle cue) more than 0.3 s from its first spoken word; a caption that never shows |
 | Frames for eyes | `frames.py VIDEO --at/--around/--every` | nothing; it picks the frames you look at |
 
 Then check by eye what no script covers:
@@ -104,16 +107,17 @@ Delete or clearly mark superseded files. Two of the files in one handoff were by
 
 ## Scripts
 
-Everything is in `scripts/`. Each script takes parameters (no hard-coded paths or sizes), prints usage with `--help`, and has a self-test on synthetic input. `scripts/self-test` runs them all. They need ffmpeg, uv, Node 22+ and Chromium (`$CHROMIUM`, default `chromium`). Captions use `fonts/Inter-Regular.ttf` (OFL, see `fonts/Inter-OFL.txt`).
+Everything is in `scripts/`. Each script takes parameters (no hard-coded paths or sizes), prints usage with `--help`, and has a self-test on synthetic input. `scripts/self-test` runs them all. They need ffmpeg, uv, Node 22+ and Chromium, and `window.py` also needs Xvfb and xdotool (`$CHROMIUM`, default `chromium`). Captions use `fonts/Inter-Regular.ttf` (OFL, see `fonts/Inter-OFL.txt`).
 
 Run each script as an executable, as in `scripts/sync.py VIDEO`, so its `uv run --script` shebang installs the dependencies it declares. Take frames with `frames.py` rather than your own ffmpeg command, because current ffmpeg has dropped `-vsync`.
 
 | Script | Block |
 | --- | --- |
 | `drive.py` | human-paced driver, events log, take provenance, preflight |
+| `window.py` | full browser window on Xvfb: OS-level x11grab recorder, xdotool input, window-pixel events |
 | `cdp.mjs` | wheel at the pointer, fresh window, close, eval |
 | `mask.js` | in-page privacy mask, injected before recording |
-| `cut.py` | EDIT.json cutter: one slot, one scale, rings, outlines, captions, chips, optional voice |
+| `cut.py` | EDIT.json cutter: one slot, one scale, rings, outlines, burned-in or soft captions, chips, optional voice |
 | `tts.py` | ElevenLabs lines with timestamps, cached |
 | `check.sh` | dead air, quiet gaps, loudness, contact sheets |
 | `framing.py` | no zoom, pan or crop |
