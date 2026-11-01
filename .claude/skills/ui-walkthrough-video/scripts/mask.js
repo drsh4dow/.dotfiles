@@ -55,5 +55,14 @@
   };
   paint();
   window.__uiwMask = setInterval(paint, 80);
+  // the interval alone lets new text show for up to 80 ms: repaint before the next frame whenever the page changes
+  // (a record that loads after a jump cut can paint a name in the very first frame the cut keeps)
+  let queued = false;
+  const ours = (x) => x.nodeType === 1 && x.classList.contains(CLS);
+  new MutationObserver((ms) => {
+    if (queued || ms.every((m) => m.type === "childList" && [...m.addedNodes, ...m.removedNodes].every(ours))) return;
+    queued = true;
+    requestAnimationFrame(() => { queued = false; paint(); });
+  }).observe(document.body, { subtree: true, childList: true, characterData: true });
   return true;
 })();

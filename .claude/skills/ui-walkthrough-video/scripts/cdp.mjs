@@ -128,6 +128,16 @@ async function selfTest() {
       return [...document.querySelectorAll('.uiw-private-mask')].some(d => { const m = d.getBoundingClientRect();
         return m.left <= b.left + 1 && m.right >= b.right - 1 && m.top <= b.top + 1 && m.bottom >= b.bottom - 1; }); })()` });
     if (covered !== true) fails.push("mask.js left the email uncovered");
+    // text that renders later is boxed before the next frame, not on the 80 ms interval: stop the interval and check
+    // that the box exists by the first animation frame after the text appears
+    const late = await commands.eval({ ...m, expr: `new Promise((done) => { clearInterval(window.__uiwMask);
+      const p = document.createElement('p'); p.style.cssText = 'font:20px sans-serif;margin:40px';
+      p.textContent = 'late.synthetic@example.com'; document.body.prepend(p);
+      // after the mask's MutationObserver has queued its repaint: a later callback in the same frame, still before paint
+      queueMicrotask(() => requestAnimationFrame(() => { const b = p.getBoundingClientRect();
+        done([...document.querySelectorAll('.uiw-private-mask')].some(d => { const m = d.getBoundingClientRect();
+          return m.left <= b.left + 41 && m.top <= b.top + 1 && m.bottom >= b.bottom - 1 && m.width > 100; })); })); })` });
+    if (late !== true) fails.push("mask.js missed text added after it started, in the first frame");
     await commands.wheel({ ...m, x: 200, y: 300, dy: 600, steps: 10 });
     let y = 0;
     for (let i = 0; i < 40 && y < 500; i++) {
