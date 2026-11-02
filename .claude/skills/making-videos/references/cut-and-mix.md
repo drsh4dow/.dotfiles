@@ -9,10 +9,11 @@ A full-window web cut is the window itself, with nothing around it:
 ```json
 {"out": "cut.mp4", "fps": 30, "canvas": [1920, 1080],
  "page": {"slot": [0, 0, 1920, 1080], "scale": 1},
- "caption_box": null, "subtitles": true, "chip_box": null,
+ "caption_box": null, "subtitles": true, "chip_box": null, "voice": "voice/voice.json",
  "shots": [{"take": "takes/today.mp4", "pieces": [{"play": [0, 14.2]}, {"play": [52.8, 61], "chip": "auto"}], "rings": true}]}
 ```
 
+- With no `lines`, every line plays at its own `voice.json` time. Trim each take so its first action lands on the word that names it.
 - Each take plays at 1.0× from start to end. Its pieces skip only backend waits. Two pieces that skip time make a jump cut; say the measured wait in the line or show it as a chip.
 - For a phone, put its whole screen in a slot at one scale for the whole video, and put words in the space beside it.
 - A cutter of your own works too when it writes the same `timeline.json` (contract in `scripts/_media.py`), so every check still runs.
