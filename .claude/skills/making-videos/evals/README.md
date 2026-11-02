@@ -12,9 +12,9 @@ claude plugin eval . --scaffold --trust-plugin --no-publish --allow-tools Bash W
 
 ## What tests generalization
 
-The skill names none of these, so they pass only if its rules carry over:
+These pass only if the rules carry over to a case the skill has no worked steps for:
 
-- `ios-walkthrough`: a platform with no tooling proven on this host.
+- `ios-walkthrough`: the skill's iOS notes are untested, and the host has no Mac, so the plan must say what it cannot do.
 - `iterate-on-feedback`: fixing someone else's cut, where the notes ask for things the rules forbid.
 
 When a change to the skill is aimed at one of these, the check no longer measures generalization. Write a new one.
