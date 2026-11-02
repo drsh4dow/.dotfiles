@@ -6,7 +6,7 @@
 """Voice a script and lay every line on one clock: the narration step for capture cuts and composed films alike.
 
     narrate.py SCRIPT.json [--out DIR] [--cache DIR] [--voice gemini:Iapetus,eleven:Mark,captions] [--style S]
-               [--offline] [--fps 30] [--lead-in 0.45] [--gap 0.2] [--chapter-gap 0.5] [--tail 1.0]
+               [--offline] [--fps 30] [--lead-in 0.45] [--gap 0.2] [--chapter-gap 0.4] [--tail 1.0]
                [--caption-chars 70]
     narrate.py SCRIPT.json --voices gemini:Iapetus,gemini:Charon,eleven:Mark [--chapter ID]
     narrate.py --self-test
@@ -15,9 +15,10 @@ SCRIPT.json lists the lines in speaking order: [{"id", "chapter", "show", "say"?
 text; say is how the voice should say it (default show) and keeps show's clause punctuation, so each caption
 starts on its own first spoken word. gap overrides the quiet before that one line. A chapter's lines are consecutive.
 --voice is a fallback chain of tts.py voices: the first that voices every line voices all of them, so one video
-never mixes voices. "captions" is no voice at all, words timed at 150 a minute. --voices instead voices one
-chapter (default the first) in each voice into DIR/<chapter>-<voice>.wav, to pick a voice by ear.
-Gaps are the quiet from one line's last sound to the next line's first word; the lead-in is the first word's time.
+never mixes voices. "captions" is no voice at all, words timed so each caption stays up 1.5 s plus 0.3 s a
+word. --voices instead voices one chapter (default the first) in each voice into DIR/<chapter>-<voice>.wav, to pick
+a voice by ear. Gaps are the quiet from one line's last sound to the next line's first word; the lead-in is the first
+word's time. Quiet inside a line is cut to at most 0.4 s, and the word times after the cut move with it.
 
 Writes DIR (default beside SCRIPT) narration.wav (48 kHz mono, -16 LUFS) and voice.json:
 
@@ -50,7 +51,9 @@ import tts  # noqa: E402
 
 SR = tts.SR
 PAD = (0.06, 0.12)  # clip audio kept before the first word and after the last sound
-CAPTION_TAIL, CAPTIONS_WPM = 0.3, 150
+CAPTION_TAIL = 0.3
+READ = (1.6, 0.3)  # captions only: s a caption stays up, plus s per word; the 1.5 s + 0.3 s rule with 0.1 s to spare
+LONGEST_PAUSE = 0.4  # quiet kept inside a line; under the 0.45 s bar after loudness normalization
 CLAUSE = re.compile(r"(?<=[.,:;?!])\s+")
 
 
@@ -79,26 +82,53 @@ def check(lines: list[dict]) -> list[dict]:
     return lines
 
 
-def unvoiced(text: str) -> dict:
-    per = 60 / CAPTIONS_WPM
-    words = [{"w": w, "start": k * per, "end": (k + 0.9) * per} for k, w in enumerate(text.split())]
-    return {"wav": None, "duration": words[-1]["end"], "words": words, "voiced_start": 0.0, "voiced_end": words[-1]["end"]}
+def unvoiced(ln: dict, max_chars: int) -> dict:
+    """Words spread evenly over each caption's reading time, so every caption stays up long enough to read."""
+    spoken, words, t = iter(say(ln).split()), [], 0.0
+    for text, _, n in caption_groups(ln, max_chars):
+        per = (READ[0] + READ[1] * len(text.split())) / n
+        for _ in range(n):
+            words.append({"w": next(spoken), "start": round(t, 3), "end": round(t + per, 3)})
+            t += per
+    return {"audio": None, "duration": t, "words": words, "voiced_start": 0.0, "voiced_end": words[-1]["end"]}
+
+
+def tighten(clip: dict) -> dict:
+    """The clip's audio with each quiet run inside its speech cut to LONGEST_PAUSE, its word times moved to match."""
+    a = _media.samples(clip["wav"], SR)
+    quiet, cuts = ~tts.loud(a), []
+    k, last = int(clip["voiced_start"] / tts.HOP), int(clip["voiced_end"] / tts.HOP)
+    while k < last:
+        j = k
+        while j < last and quiet[j]:
+            j += 1
+        if (j - k) * tts.HOP > LONGEST_PAUSE:
+            cuts.append((k * tts.HOP + LONGEST_PAUSE / 2, j * tts.HOP - LONGEST_PAUSE / 2))
+        k = j + 1
+    moved = lambda t: round(t - sum(max(0.0, min(t, c1) - c0) for c0, c1 in cuts), 3)  # noqa: E731
+    keep = np.ones(len(a), bool)
+    for c0, c1 in cuts:
+        keep[int(c0 * SR):int(c1 * SR)] = False
+    a = a[keep]
+    return {"audio": a, "duration": len(a) / SR, "voiced_start": clip["voiced_start"],
+            "voiced_end": moved(clip["voiced_end"]),
+            "words": [{"w": w["w"], "start": moved(w["start"]), "end": moved(w["end"])} for w in clip["words"]]}
 
 
 def voice_all(lines: list[dict], chain: list[str], a) -> tuple[str, list[dict]]:
     for spec in chain:
         if spec == "captions":
-            return spec, [unvoiced(say(ln)) for ln in lines]
+            return spec, [unvoiced(ln, a.caption_chars) for ln in lines]
         try:
             voice = tts.parse(spec, a.style)
-            return spec, [tts.synth(say(ln), a.cache, voice, a.offline) for ln in lines]
+            return spec, [tighten(tts.synth(say(ln), a.cache, voice, a.offline)) for ln in lines]
         except tts.ProviderError as e:
             print(f"narrate.py: {spec} failed ({e}); voicing every line with the next voice", file=sys.stderr)
     raise SystemExit(f"narrate.py: no voice in {','.join(chain)} voiced every line")
 
 
-def captions(ln: dict, words: list[dict], end: float, max_chars: int) -> list[dict]:
-    """Whole clauses of show grouped into captions; each starts on the spoken word that starts its first clause."""
+def caption_groups(ln: dict, max_chars: int) -> list[tuple[str, int, int]]:
+    """Whole clauses of show grouped into captions, each as (text, its first spoken word, its spoken word count)."""
     shown, first, n = CLAUSE.split(ln["show"].strip()), [], 0
     for clause in CLAUSE.split(say(ln).strip()):
         first.append(n)
@@ -110,18 +140,24 @@ def captions(ln: dict, words: list[dict], end: float, max_chars: int) -> list[di
             groups.append([i])
         else:
             groups[-1].append(i)
-    starts = [words[first[g[0]]]["t"] for g in groups]
-    return [{"text": " ".join(shown[j] for j in g), "start": s, "end": e}
-            for g, s, e in zip(groups, starts, starts[1:] + [end])]
+    first.append(n)
+    return [(" ".join(shown[j] for j in g), first[g[0]], first[g[-1] + 1] - first[g[0]]) for g in groups]
+
+
+def captions(ln: dict, words: list[dict], end: float, max_chars: int) -> list[dict]:
+    """Each caption starts on the spoken word that starts its first clause and ends where the next one starts."""
+    groups = caption_groups(ln, max_chars)
+    starts = [words[i]["t"] for _, i, _ in groups]
+    return [{"text": text, "start": s, "end": e} for (text, _, _), s, e in zip(groups, starts, starts[1:] + [end])]
 
 
 def mix(pieces: list[tuple[dict, float]], duration: float, dest: Path) -> None:
     buf = np.zeros(int(np.ceil(duration * SR)), np.float32)
     for clip, shift in pieces:
-        if not clip["wav"]:
+        if clip["audio"] is None:
             continue
         a0, a1 = max(0.0, clip["voiced_start"] - PAD[0]), min(clip["duration"], clip["voiced_end"] + PAD[1])
-        a = _media.samples(clip["wav"], SR)[int(a0 * SR):int(a1 * SR)]
+        a = clip["audio"][int(a0 * SR):int(a1 * SR)]
         f = min(len(a), int(0.02 * SR))
         a[:f] *= np.linspace(0, 1, f)
         a[len(a) - f:] *= np.linspace(1, 0, f)
@@ -131,7 +167,7 @@ def mix(pieces: list[tuple[dict, float]], duration: float, dest: Path) -> None:
         buf[at:at + len(a)] += a[:len(buf) - at]
     raw = dest.with_suffix(".raw.wav")
     _media.write_wav(raw, buf, SR)
-    if not any(clip["wav"] for clip, _ in pieces):
+    if all(clip["audio"] is None for clip, _ in pieces):
         raw.replace(dest)
         return
     meas = subprocess.run(["ffmpeg", "-hide_banner", "-i", str(raw), "-af",
@@ -197,19 +233,21 @@ def self_test() -> int:
         calls.append(voice.voice)
         if voice.voice == "Broken" and len(calls) > 1:
             raise tts.ProviderError("HTTP 403")
-        n = len(text.split())
-        t = np.arange(int((0.4 + 0.4 * n) * SR)) / SR
-        a = 0.3 * np.sin(2 * np.pi * (150 + 20 * len(voice.voice)) * t) * ((t >= 0.1) & ((t - 0.1) % 0.4 < 0.3))
+        words, at = [], 0.1
+        for w in text.split():  # 0.3 s a word, then 0.1 s of quiet, or 0.8 s after a comma as Iapetus pauses
+            words.append({"w": w, "start": round(at, 3), "end": round(at + 0.3, 3)})
+            at += 0.3 + (0.8 if w.endswith(",") else 0.1)
+        t = np.arange(int((words[-1]["end"] + 0.1) * SR)) / SR
+        on = np.any([(t >= w["start"]) & (t < w["end"]) for w in words], axis=0)
         Path(cache).mkdir(exist_ok=True)
         wav = Path(cache) / f"clip-{len(calls)}.wav"
-        _media.write_wav(wav, a * (t < 0.1 + 0.4 * n), SR)
-        words = [{"w": w, "start": round(0.1 + 0.4 * k, 3), "end": round(0.4 + 0.4 * k, 3)} for k, w in enumerate(text.split())]
-        return {"wav": str(wav), "duration": len(a) / SR, "words": words, "voiced_start": 0.1, "voiced_end": words[-1]["end"]}
+        _media.write_wav(wav, 0.3 * np.sin(2 * np.pi * (150 + 20 * len(voice.voice)) * t) * on, SR)
+        return {"wav": str(wav), "duration": len(t) / SR, "words": words, "voiced_start": 0.1, "voiced_end": words[-1]["end"]}
 
     tts.synth = fake_synth
     script = [{"id": "a1", "chapter": "intro", "show": "Open the app, then sign in."},
               {"id": "a2", "chapter": "intro", "show": "Run bin/sync now.", "say": "Run bin sync now."},
-              {"id": "b1", "chapter": "main", "show": "One long line runs on, past the caption limit, so it splits."}]
+              {"id": "b1", "chapter": "main", "show": "One long line runs on, past the caption limit. It splits."}]
     with tempfile.TemporaryDirectory() as tmp, contextlib.redirect_stdout(io.StringIO()):
         d = Path(tmp)
         (d / "script.json").write_text(json.dumps(script))
@@ -219,7 +257,7 @@ def self_test() -> int:
         a1, a2, b1 = v["lines"]
         if v["voice"] != "gemini:Good" or calls != ["Broken", "Broken", "Good", "Good", "Good"]:
             fails.append(f"a provider failure did not revoice every line with the next voice: {v['voice']}, {calls}")
-        if [a1["start"], round(a2["start"] - a1["end"], 3), round(b1["start"] - a2["end"], 3)] != [0.45, 0.2, 0.5] \
+        if [a1["start"], round(a2["start"] - a1["end"], 3), round(b1["start"] - a2["end"], 3)] != [0.45, 0.2, 0.4] \
                 or v["duration"] != round(b1["end"] + 1.0, 3):
             fails.append(f"gaps: lines {[(ln['start'], ln['end']) for ln in v['lines']]}, duration {v['duration']}")
         if v["chapters"] != [{"id": "intro", "start": a1["start"], "end": a2["end"]},
@@ -236,10 +274,16 @@ def self_test() -> int:
         if fmt != "48000,1" or abs(len(a) / SR - v["duration"]) > 0.01:
             fails.append(f"narration.wav is not 48 kHz mono of {v['duration']} s")
         lf = tts.loud(a)
-        for ln, prev in zip(v["lines"], [0.0] + [ln["end"] for ln in v["lines"]]):
-            onset = (int(prev / tts.HOP) + 2 + np.flatnonzero(lf[int(prev / tts.HOP) + 2:])[0]) * tts.HOP
-            if abs(onset - ln["start"]) > 0.02:
-                fails.append(f"{ln['id']} is heard at {onset:.2f} s but starts at {ln['start']} s")
+        words = [w for ln in v["lines"] for w in ln["words"]]
+        for w, prev in zip(words, [0.0] + [w["end"] for w in words]):
+            k = int(prev / tts.HOP) + 2
+            onset = (k + np.flatnonzero(lf[k:])[0]) * tts.HOP
+            if abs(onset - w["t"]) > 0.02:
+                fails.append(f"{w['w']!r} is heard at {onset:.2f} s but timed at {w['t']} s")
+        for ln in v["lines"]:
+            edges = np.flatnonzero(np.diff(np.r_[0, ~lf[int(ln["start"] / tts.HOP):int(ln["end"] / tts.HOP)], 0]))
+            if (longest := max(edges[1::2] - edges[::2]) * tts.HOP) > 0.45:
+                fails.append(f"{ln['id']} keeps {longest:.2f} s of quiet inside it")
         n = len(calls)
         for bad, why in ((["--voice", "gemini:Good,eleven:Mark", "--offline"], "an offline miss fell through to the next voice"),
                          (["--voice", "nobody:x"], "an unknown provider passed")):
@@ -263,8 +307,9 @@ def self_test() -> int:
             fails.append(f"--voices did not voice the chapter once per voice into its own wav: {calls[n:]}")
         run("--voice", "captions")
         v = json.loads((d / "voice.json").read_text())
-        if v["voice"] != "captions" or v["lines"][0]["words"][1]["t"] != 0.85 or tts.loud(_media.samples(d / "narration.wav", SR)).any():
-            fails.append("captions only did not time words at 150 a minute over silence")
+        short = [c for ln in v["lines"] for c in ln["captions"] if c["end"] - c["start"] < 1.5 + 0.3 * len(c["text"].split())]
+        if v["voice"] != "captions" or short or tts.loud(_media.samples(d / "narration.wav", SR)).any():
+            fails.append(f"captions only did not keep every caption up to read over silence: {short}")
     print("narrate.py self-test: " + ("PASS" if not fails else "FAIL\n  " + "\n  ".join(fails)))
     return 0 if not fails else 1
 
@@ -281,7 +326,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--style", default=tts.STYLE)
     p.add_argument("--offline", action="store_true")
     p.add_argument("--fps", type=int, default=30)
-    for flag, default in (("--lead-in", 0.45), ("--gap", 0.2), ("--chapter-gap", 0.5), ("--tail", 1.0)):
+    for flag, default in (("--lead-in", 0.45), ("--gap", 0.2), ("--chapter-gap", 0.4), ("--tail", 1.0)):
         p.add_argument(flag, type=float, default=default)
     p.add_argument("--caption-chars", type=int, default=70)
     a = p.parse_args(argv)
