@@ -7,7 +7,7 @@
 against the moment the voice says its first word, heard by a local speech recognizer (sync).
 
     HF_HUB_OFFLINE=1 sync.py TIMELINE.json [--profile narrated|captions] [--video V.mp4] [--out DIR] [--limit 0.3]
-                     [--hold-base 1.5] [--per-word 0.3]
+                     [--hold-base 1.5] [--per-word 0.3] [--voice VOICE.wav]
     sync.py VIDEO.mp4 [same options]              # an export with soft subtitles: its own cues are the captions
     sync.py TIMELINE.json --words WORDS.json     # word times from a file instead of ASR (not a measurement)
     sync.py --self-test
@@ -20,10 +20,15 @@ frames the timeline marks caption-free, so a late caption does not count as empt
 subtitles (timeline "subtitles", or a VIDEO with a subtitle track), each cue's start and end are read from the
 export's own subtitle track instead. The timeline only says which caption should appear near which time (within
 WINDOW s), never what time to report.
-Holds (both profiles): each caption must stay on screen at least --hold-base s plus --per-word s per word, and
-end a sentence (. ! ? or ...), so no sentence is split across captions. A caption that never shows fails.
+Holds (captions profile): each caption must stay on screen at least --hold-base s plus --per-word s per word, and
+end a sentence (. ! ? or ...), so no sentence is split across captions. A caption that never shows fails. The
+narrated profile reports how long each caption holds and fails none: a narrated caption lasts as long as its
+spoken clause, and narrate.py splits captions at clauses on purpose.
 Sync (narrated profile only; captions reports it not applicable): faster-whisper (WHISPER_MODEL, default
-small.en; CPU, int8) transcribes the export's audio with word timestamps. The audio never leaves the machine.
+small.en; CPU, int8) transcribes the export's audio, or --voice VOICE.wav when given, with word timestamps. The
+audio never leaves the machine. Pass --voice when the export mixes in a music bed: the bed can keep the audio
+above the onset level, so onsets fall back to Whisper's early word start. mix.sh keeps the voice's timing, so the
+voice track runs on the export's clock.
 Each caption's first word is found by aligning caption tokens with heard tokens; its onset is the last rise of
 the audio envelope above -40 dBFS after >= 80 ms below it, within 1.2 s before that word's end (Whisper
 stretches word starts back over pauses). Offset = caption's first frame - speech onset; |offset| over --limit
@@ -102,7 +107,7 @@ def from_video(video: Path) -> dict:
 
 
 def run(d: dict, video: Path | None, out: Path, limit: float, words_file: Path | None, profile: str = "narrated",
-        base: float = 1.5, per_word: float = 0.3):
+        base: float = 1.5, per_word: float = 0.3, voice: Path | None = None):
     video = video or Path(d["video"])
     caps, box = d.get("captions", []), d.get("caption_box")
     if not caps or not (box or d.get("subtitles")):
@@ -129,25 +134,28 @@ def run(d: dict, video: Path | None, out: Path, limit: float, words_file: Path |
                  "" if re.search(r"[.!?…][\"'”’)\]]*$", c["text"].strip()) else "split mid-sentence"]
         holds.append({"i": i, "text": c["text"], "shown": None if f0 is None else f0 / fps, "held": held,
                       "need": round(need, 3), "note": "; ".join(n for n in notes if n)})
-    bad_holds = [h for h in holds if h["note"]]
+    bad_holds = [h for h in holds if h["note"]] if profile == "captions" else []
     tight = min((h for h in holds if h["held"] is not None), key=lambda h: h["held"] - h["need"], default=None)
     f = lambda v: "—" if v is None else f"{v:.3f}"  # noqa: E731
     md = ["# Caption checks on the export", "", f"Video: {video}. Captions: {where}. Profile: {profile}.", "",
-          "## Holds", "", f"Each caption on screen at least {base} s plus {per_word} s per word, ending a sentence.",
+          "## Holds", "", f"Each caption on screen at least {base} s plus {per_word} s per word, ending a sentence."
+          if profile == "captions" else f"Each caption's hold against {base} s plus {per_word} s per word.",
           f"Captions shown: {len(span)} of {len(caps)}. Failing: {len(bad_holds)}. "
           + (f"Worst margin: {tight['held'] - tight['need']:+.2f} s at {f(tight['shown'])} s, '{tight['text'][:60]}'."
              if tight else "Worst margin: not measured."), "",
           "| # | Shown (s) | Held (s) | Needs (s) | Caption | Note |", "| --- | --- | --- | --- | --- | --- |",
           *[f"| {h['i']} | {f(h['shown'])} | {f(h['held'])} | {h['need']:.2f} | {h['text'][:70]} | {h['note']} |"
             for h in holds],
-          "", f"Holds: {'PASS' if not bad_holds else 'FAIL'}", "", "## Sync", ""]
+          "", f"Holds: {'PASS' if not bad_holds else 'FAIL'}" if profile == "captions"
+          else "Holds: reported, not failed, because a narrated caption lasts as long as its spoken clause.", "",
+          "## Sync", ""]
     report = {"video": str(video), "spans": spans, "holds": holds}
     out.mkdir(parents=True, exist_ok=True)
     if profile == "captions":
         md += ["Sync: not applicable (captions-only profile, no voice)."]
         ok_sync = None
     else:
-        ok_sync, lines = sync(caps, {i: s[0] for i, s in span.items()}, fps, video, limit, words_file, report)
+        ok_sync, lines = sync(caps, {i: s[0] for i, s in span.items()}, fps, video, limit, words_file, report, voice)
         md += lines
     md += ["", f"Verdict: {'PASS' if not bad_holds and ok_sync is not False else 'FAIL'}"]
     (out / "sync.json").write_text(json.dumps(report, indent=1))
@@ -155,14 +163,15 @@ def run(d: dict, video: Path | None, out: Path, limit: float, words_file: Path |
     return not bad_holds, ok_sync, [line for line in md if not line.startswith("| ")]
 
 
-def sync(caps: list[dict], first: dict, fps: float, video: Path, limit: float, words_file: Path | None, report: dict):
-    a = _media.samples(video, SR) if _media.probe(video)["audio"] else None
+def sync(caps: list[dict], first: dict, fps: float, video: Path, limit: float, words_file: Path | None, report: dict,
+         voice: Path | None):
+    a = _media.samples(voice or video, SR) if voice or _media.probe(video)["audio"] else None
     if words_file:
         heard, source = json.loads(Path(words_file).read_text()), f"word times from {words_file} (not heard from the export)"
     elif a is None:
         raise SystemExit("sync.py: the export has no audio to listen to")
     else:
-        heard, source = _media.heard_words(a), "local faster-whisper on the export's audio"
+        heard, source = _media.heard_words(a), "local faster-whisper on " + str(voice or "the export's audio")
     ons = onsets(a) if a is not None else np.array([])
     exp, cap_first = [], []
     for c in caps:
@@ -224,11 +233,16 @@ def self_test() -> int:
         words = [{"w": w, "start": s + 0.05 + 0.3 * j, "end": s + 0.3 + 0.3 * j}
                  for t, s, _ in caps for j, w in enumerate(t.split())]
         (d / "words.json").write_text(json.dumps(words))
-        def check(name, video, planned, profile, **tl):
+        (d / "early.json").write_text(json.dumps([{**w, "start": w["start"] - 0.6} for w in words]))
+        t = np.arange(int(secs * SR)) / SR
+        voice = 0.3 * np.sin(2 * np.pi * 220 * t) * np.any([(s <= t) & (t < e - 0.3) for _, s, e in caps], axis=0)
+        _media.write_wav(d / "voice.wav", voice, SR)
+        _media.write_wav(d / "mix.wav", voice + 0.05 * np.sin(2 * np.pi * 110 * t), SR)
+        def check(name, video, planned, profile, words="words.json", voice=None, **tl):
             tl = {"video": str(video), "fps": fps, "canvas": [640, 360], "total": secs, "shots": [],
                   "captions": [{"text": t, "show": s, "hide": e} for t, s, e in planned], **tl}
-            return run(tl, None, d / name, 0.3, d / "words.json", profile)[:2]
-        def burned(name, shown, planned=caps, profile="narrated", fade=0):
+            return run(tl, None, d / name, 0.3, d / words, profile, voice=voice)[:2]
+        def burned(name, shown, planned=caps, profile="narrated", fade=0, audio=None, **kw):
             def frames():
                 for k in range(int(secs * fps)):
                     img = Image.new("RGB", (640, 360), (226, 232, 240))
@@ -242,8 +256,8 @@ def self_test() -> int:
                             ink = int(226 - 211 * min(1.0, (k + 1 - s * fps) / fade))
                             dr.text((200, 310), text, font=fnt, fill=(ink, ink, ink))
                     yield np.asarray(img)
-            _media.write_video(d / f"{name}.mp4", frames(), 640, 360, fps)
-            return check(name, d / f"{name}.mp4", planned, profile, caption_box=[0, 300, 640, 60])
+            _media.write_video(d / f"{name}.mp4", frames(), 640, 360, fps, audio)
+            return check(name, d / f"{name}.mp4", planned, profile, caption_box=[0, 300, 640, 60], **kw)
         def soft(name, shown):
             _media.write_video(d / f"{name}.mp4", (np.full((360, 640, 3), 240, np.uint8) for _ in range(int(secs * fps))),
                                640, 360, fps)
@@ -263,7 +277,13 @@ def self_test() -> int:
             ("captions shown on their words", burned("ontime", caps), (True, True)),
             ("thin text with no box, fading in over 4 frames", burned("thin", caps, fade=4), (True, True)),
             ("a caption 0.6 s late", burned("late", late), (True, False)),
-            ("a caption that never appears", burned("missing", [caps[0], caps[2]]), (False, False)),
+            ("a caption that never appears", burned("missing", [caps[0], caps[2]]), (True, False)),
+            ("narrated, a clause held 1.4 s of the 2.1 s a caption would need",
+             burned("clause", clause := [caps[0], ("Bravo two", 2.8, 4.2), caps[2]], clause), (True, True)),
+            ("a music bed under the voice, words heard 0.6 s early, onsets from the mix",
+             burned("bed", caps, audio=d / "mix.wav", words="early.json"), (True, False)),
+            ("the same, onsets from --voice", burned("bed-voice", caps, audio=d / "mix.wav", words="early.json",
+                                                     voice=d / "voice.wav"), (True, True)),
             ("captions-only, a caption held 1.4 s of the 2.1 s it needs",
              burned("short", [caps[0], ("Bravo two.", 2.8, 4.2), caps[2]], profile="captions"), (False, None)),
             ("captions-only, a caption already on screen at frame 0",
@@ -293,8 +313,9 @@ def main() -> int:
     d = json.loads(src.read_text()) if src.suffix == ".json" else from_video(src)
     video = Path(arg(a, "--video")).resolve() if "--video" in a else None
     words = Path(arg(a, "--words")) if "--words" in a else None
+    voice = Path(arg(a, "--voice")).resolve() if "--voice" in a else None
     holds, synced, md = run(d, video, Path(arg(a, "--out", src.parent / "checks")), float(arg(a, "--limit", 0.3)), words,
-                            profile, float(arg(a, "--hold-base", 1.5)), float(arg(a, "--per-word", 0.3)))
+                            profile, float(arg(a, "--hold-base", 1.5)), float(arg(a, "--per-word", 0.3)), voice)
     print("\n".join(md))
     return 0 if holds and synced is not False else 1
 
