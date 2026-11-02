@@ -32,7 +32,7 @@ Prose rules leaked one word per round ("brief cards over empty areas", a blurred
 
 ## Mix
 
-`scripts/mix` lays the voice over an optional music bed:
+`scripts/mix.sh` lays the voice over an optional music bed:
 
 - Voice at -16 LUFS integrated, true peak at or under -1.5 dBTP.
 - Music about 16 dB under the voice, ducked with a 120 ms look-ahead sidechain.

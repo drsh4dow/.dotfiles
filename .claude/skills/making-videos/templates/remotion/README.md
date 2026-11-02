@@ -11,7 +11,7 @@ npx remotion render Film out/check.mp4 --frames=120-240 --scale=0.5  # motion ch
 npx remotion bundle src/index.ts --out-dir=out/bundle                # bundle once, then any number of stills
 npx remotion still out/bundle Film out/f140.png --frame=140
 npx remotion render Film out/film.mp4                                # full 1080p picture; the config keeps renders muted
-../../scripts/mix out/film.mp4 ...                                   # voice plus music, from this skill's scripts/ (the name may change)
+../../scripts/mix.sh out/film.mp4 public/voice.wav out/final.mp4   # voice plus optional --music bed
 ```
 
 - The range flag is `--frames=A-B`. `--frame-range` is ignored and renders the whole film.

@@ -65,8 +65,8 @@ All in `scripts/`. Each prints `--help`, takes parameters, and has a self-test; 
 | `narrate.py`, `tts.py` | voice: lines to `narration.wav` and `voice.json`, cached per line |
 | `window.py`, `drive.py`, `cdp.mjs`, `mask.js` | web capture: full window on Xvfb, human input, events log, privacy mask |
 | `cut.py` | cut takes from `EDIT.json`: one scale, rings, outlines, captions, chips, voice |
-| `mix` | voice plus music bed, ducked, to -16 LUFS |
-| `check.sh`, `framing.py`, `overlays.py`, `sync.py`, `dips.py`, `framediff.py` | checks on the export |
+| `mix.sh`, `music.sh` | voice plus an optional music bed, ducked, to -16 LUFS |
+| `check.sh`, `sync.py`, `framing.py`, `overlays.py`, `framediff.py` | checks on the export |
 | `frames.py` | frames by index for your eyes and the watcher's |
 
 `templates/remotion/` is the starter for composed films.
