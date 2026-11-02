@@ -22,7 +22,8 @@ Pick the shape that fits the one sentence the viewer should leave with.
 
 - `show` is the caption. `say` is what the voice reads, spelled the way it should sound (`V-O-B`, `agents dot M-D`). Omit `say` when the two match. Keep the same sentences and clause breaks in both.
 - One sentence per line. Voices pause longer than 0.6 s between two sentences in one line.
-- Name the action in the line that performs it ("Click Listings in the sidebar."). The take fires the action on that word.
+- Name the action in the line that performs it, and the first time, where the control is ("Click Approve, at the right end of the row."). The take fires the action on that word.
+- When a new screen appears, give it a line about what it shows before the next action, so it stays up long enough to read.
 - When a result takes time, cut the wait and say the measured time ("DealFlow answers within a minute").
 - Use the viewer's words. Define a term the first time it is spoken. Never put an internal name, enum value or ticket key on screen without saying what it means.
 - A line claims only what its frame shows. A fact the frame cannot show, such as the deployed commit or the signed-in account, goes on screen or out of the line.

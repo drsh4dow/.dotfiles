@@ -26,7 +26,7 @@ Copy these into your todo list. Each ends on its done-when.
 
 1. **Brief.** Write `BRIEF.md` in `~/Videos/<project>/src/`: the audience and what they know, where it plays, the one sentence they leave with, length, kind, truth sources, the identities allowed on screen, and the voice. Done when you have checked it against each rule above and nothing in it contradicts one.
 2. **Script.** Write `script.json` and `CLAIMS.md` per [references/story.md](references/story.md). Done when every line has its source in `CLAIMS.md`.
-3. **Voice.** `scripts/narrate.py script.json` writes `narration.wav` and `voice.json`, the clock every later block reads. Render a chapter in two or three voices with `--voices` for the user to hear. The default is Gemini's Iapetus, then ElevenLabs' Mark, then captions only; say which one ran. Done when `voice.json` exists and its gap report passes.
+3. **Voice.** `scripts/narrate.py script.json` writes `narration.wav` and `voice.json`, the clock every later block reads. Render a chapter in two or three voices with `--voices` for the user to hear. The default is Gemini's Iapetus, then ElevenLabs' Mark, then captions only; say which one ran. Done when the user has picked the voice by ear (or you logged the default because the user said to run without stopping), and `voice.json` in that voice passes its gap report. Every take and scene is timed to this file, so a later voice change means new takes.
 4. **Picture.** Read the reference for where the picture comes from:
 
    | Picture | Read |

@@ -16,7 +16,6 @@ The skill names none of these, so they pass only if its rules carry over:
 
 - `ios-walkthrough`: a platform with no tooling proven on this host.
 - `iterate-on-feedback`: fixing someone else's cut, where the notes ask for things the rules forbid.
-- `voice-picked-and-locked` in `before-after-web`: follows from the step order, not a stated rule.
 
 When a change to the skill is aimed at one of these, the check no longer measures generalization. Write a new one.
 

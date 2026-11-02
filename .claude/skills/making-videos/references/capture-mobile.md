@@ -1,6 +1,6 @@
 # Capturing a phone or tablet app
 
-The picture is the device's whole screen, status and navigation bars included, at one scale for the whole video. Taps show as rings drawn from logged events. A project's `verify-mobile` skill, when it has one, says how to build, install and sign in: read it first.
+The picture is the device's whole screen, status and navigation bars included, at one scale for the whole video. Taps show as rings drawn from logged events, moved onto the video clock as Taps below says. A project's `verify-mobile` skill, when it has one, says how to build, install and sign in: read it first.
 
 ## Android (proven)
 
