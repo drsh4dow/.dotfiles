@@ -20,18 +20,20 @@ EDIT.json (paths relative to it; every box is [x, y, w, h] in canvas pixels unle
      "chip_box": [1730, 20, 180, 48],                         # where "N s later" goes; null when no chips
      "labels": [{"box": [8, 20, 184, 40], "text": "Chapter 1", "t0": 0, "t1": 9}],
      "font": null,                                            # default: the skill's fonts/Inter-Regular.ttf
-     "tts": {"cache": "tts", "offline": false},               # null: no voice; each line then needs "dur"
+     "voice": "voice/voice.json",                             # narrate.py's output; narration.wav beside it
      "shots": [{"take": "takes/t1.mp4",                       # events default: takes/t1.events.json
                 "pieces": [{"play": [0, 4]}, {"hold": 4, "for": 1.5}, {"play": [30, 34], "chip": "auto"}],
                 "outlines": [{"src": [1, 3], "mark": "save", "key": "box", "color": [37, 99, 235]},
                              {"src": [5, 7], "box": [100, 200, 300, 40]}],   # take pixels
                 "rings": true}],
-     "lines": [{"text": "Caption text.", "say": "what the voice says", "at": 0.3}]}
+     "lines": [{"id": "c1-1", "at": 0.3}]}                    # null: every voice.json line at its own time
 
 A piece plays take seconds [s0, s1] at "speed" (default 1), or holds one take frame "for" seconds. Consecutive
 pieces that skip take time are a jump cut; "chip": "auto" on the later piece shows "N s later" in chip_box.
-A line's "at" is the output time its first word starts. Rings come from the take's logged clicks. Outlines
-come from a logged DOM box ("mark", "key") or a literal take-pixel box; they cover the take seconds "src".
+A line names a voice.json line; its "at" is the output time its first word starts (default its voice.json
+time), and its captions and audio from voice.json and narration.wav move with it. Rings come from the take's
+logged clicks. Outlines come from a logged DOM box ("mark", "key") or a literal take-pixel box; they cover the
+take seconds "src".
 
 Rules the cutter enforces (exit 2): one scale for every take; every text box outside the page slot; captions
 fit caption_rows; narration lines don't overlap and end before the picture does.
@@ -40,7 +42,6 @@ from __future__ import annotations
 
 import json
 import math
-import re
 import subprocess
 import sys
 import tempfile
@@ -53,7 +54,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import _media  # noqa: E402
 
 SR = 48000
-CAPTION_LEAD, CAPTION_TAIL = 0.05, 0.25
+CAPTION_LEAD = 0.05
 RING_DUR, RING_MAX = 0.65, 44
 OUTLINE_PAD, OUTLINE_W, FADE = 4, 3, 0.2
 CHIP_FOR = 1.2
@@ -61,8 +62,8 @@ CHIP_FOR = 1.2
 
 class EditError(SystemExit):
     def __init__(self, msg: str):
-        super().__init__(f"cut.py: {msg}")
-        self.code = 2
+        print(f"cut.py: {msg}", file=sys.stderr)  # SystemExit prints nothing once its code is the number 2
+        super().__init__(2)
 
 
 def inter(a, b) -> bool:
@@ -129,32 +130,6 @@ def out_last(pieces, src) -> float | None:
         elif kind == "play" and s0 <= src + 1e-6:
             best = o1 if src >= s1 else o0 + (src - s0) / sp
     return best
-
-
-def chunks_of(text: str, times: list[tuple[float, float]], max_chars: int) -> list[dict]:
-    words, out, cur = text.split(), [], []
-    for i, w in enumerate(words):
-        cur.append(i)
-        joined = " ".join(words[j] for j in cur)
-        if re.search(r"[.?!:]$", w) or len(joined) > max_chars or i == len(words) - 1:
-            out.append({"text": joined, "start": times[cur[0]][0], "end": times[cur[-1]][1]})
-            cur = []
-    return out
-
-
-def word_times(line: dict, clip: dict | None) -> list[tuple[float, float]]:
-    words = line["text"].split()
-    if clip and len(clip["words"]) == len(words):
-        vs = clip["voiced_start"]
-        return [(line["start"] + w["start"] - vs, line["start"] + w["end"] - vs) for w in clip["words"]]
-    # spoken words differ from caption words (a "say" override) or no voice: spread by characters
-    total = sum(len(w) + 1 for w in words)
-    out, acc, span = [], 0, line["end"] - line["start"]
-    for w in words:
-        a = line["start"] + span * acc / total
-        acc += len(w) + 1
-        out.append((a, line["start"] + span * acc / total))
-    return out
 
 
 def wrap(d: ImageDraw.ImageDraw, text: str, fnt, max_w: float) -> list[str]:
@@ -245,42 +220,39 @@ class Cut:
         self.plan_lines()
 
     def plan_lines(self):
-        tts_cfg = self.e.get("tts")
-        synth = None
-        if tts_cfg:
-            import tts  # noqa: PLC0415
-            cache = self.root / tts_cfg.get("cache", "tts")
-            synth = lambda say: tts.synth(say, cache, offline=tts_cfg.get("offline", False))  # noqa: E731
-        self.lines, prev_end = [], -1.0
-        for ln in self.e.get("lines", []):
-            clip = synth(ln.get("say", ln["text"])) if synth else None
-            dur = clip["voiced_end"] - clip["voiced_start"] if clip else float(ln["dur"]) if "dur" in ln else None
-            if dur is None:
-                raise EditError(f"line '{ln['text'][:40]}' has no voice and no dur")
-            start = float(ln["at"])
+        vpath = self.root / self.e["voice"] if self.e.get("voice") else None
+        voice = json.loads(vpath.read_text()) if vpath else {"lines": [], "duration": 0.0}
+        self.voice_wav = vpath and vpath.parent / "narration.wav"
+        vls = voice["lines"]
+        index = {vl["id"]: i for i, vl in enumerate(vls)}
+        self.lines, self.captions, prev_end = [], [], -1.0
+        for ln in self.e.get("lines") or [{"id": vl["id"]} for vl in vls]:
+            if ln["id"] not in index:
+                raise EditError(f"line '{ln['id']}' is not in {vpath}")
+            i = index[ln["id"]]
+            vl = vls[i]
+            shift = float(ln.get("at", vl["start"])) - vl["start"]
+            start, end = vl["start"] + shift, vl["end"] + shift
             if start < prev_end + 0.1:
-                raise EditError(f"line '{ln['text'][:40]}' starts at {start:.2f}, before the last one ends ({prev_end:.2f})")
-            if start + dur > self.total:
-                raise EditError(f"line '{ln['text'][:40]}' ends at {start + dur:.2f}, after the picture ({self.total:.2f}); "
-                                "add a hold")
-            line = {"text": ln["text"], "say": ln.get("say", ln["text"]), "start": start, "end": start + dur, "clip": clip}
-            self.lines.append(line)
-            prev_end = line["end"]
-        self.captions = []
-        if self.e.get("caption_box") or self.e.get("subtitles"):
-            d = ImageDraw.Draw(Image.new("RGB", (8, 8)))
-            rows = int(self.e.get("caption_rows", 2))
-            for ln in self.lines:
-                for c in chunks_of(ln["text"], word_times(ln, ln["clip"]), int(self.e.get("caption_chars", 90))):
-                    if self.e.get("caption_box") and len(wrap(d, c["text"], self.f_cap, self.e["caption_box"][2] - 80)) > rows:
-                        raise EditError(f"caption wraps past {rows} rows: '{c['text'][:60]}'; cut words")
-                    self.captions.append(c | {"show": max(0.0, c["start"] - CAPTION_LEAD)})
-            # a caption hides at the next one's show time, so an old caption's tail never holds the next one back
-            for i, c in enumerate(self.captions):
-                hide = c["end"] + CAPTION_TAIL
-                if i + 1 < len(self.captions):
-                    hide = min(hide, self.captions[i + 1]["show"])
-                c["hide"] = min(hide, self.total)
+                raise EditError(f"line '{ln['id']}' starts at {start:.2f}, before the last one ends ({prev_end:.2f})")
+            if end > self.total:
+                raise EditError(f"line '{ln['id']}' ends at {end:.2f}, after the picture ({self.total:.2f}); add a hold")
+            lo = (vls[i - 1]["end"] + vl["start"]) / 2 if i else 0.0  # cut in the quiet, so a moved line never takes a neighbour's words
+            hi = (vl["end"] + vls[i + 1]["start"]) / 2 if i + 1 < len(vls) else voice["duration"]
+            self.lines.append({"text": vl["show"], "start": start, "end": end, "audio": (lo, hi, shift)})
+            self.captions += [{"text": c["text"], "start": c["start"] + shift, "end": c["end"] + shift} for c in vl["captions"]]
+            prev_end = end
+        if not (self.e.get("caption_box") or self.e.get("subtitles")):
+            self.captions = []
+        d = ImageDraw.Draw(Image.new("RGB", (8, 8)))
+        rows = int(self.e.get("caption_rows", 2))
+        for c in self.captions:
+            if self.e.get("caption_box") and len(wrap(d, c["text"], self.f_cap, self.e["caption_box"][2] - 80)) > rows:
+                raise EditError(f"caption wraps past {rows} rows: '{c['text'][:60]}'; cut words")
+            c["show"] = max(0.0, c["start"] - CAPTION_LEAD)
+        for i, c in enumerate(self.captions):
+            nxt = self.captions[i + 1]["show"] if i + 1 < len(self.captions) else self.total
+            c["hide"] = min(c["end"], nxt, self.total)
 
     # ------------------------------------------------------------------ draw
     def base(self) -> Image.Image:
@@ -378,38 +350,15 @@ class Cut:
 
     # ------------------------------------------------------------------ audio, docs
     def narration(self, dest: Path) -> None:
-        n = int(math.ceil(self.total * SR))
-        buf = np.zeros(n, np.float32)
+        buf = np.zeros(int(math.ceil(self.total * SR)), np.float32)
+        a = _media.samples(self.voice_wav, SR) if self.lines else None
         for ln in self.lines:
-            clip = ln["clip"]
-            if not clip:
-                continue
-            pcm = subprocess.run(["ffmpeg", "-v", "error", "-i", clip["wav"], "-f", "f32le", "-ac", "1", "-ar", str(SR), "-"],
-                                 capture_output=True, check=True).stdout
-            a = np.frombuffer(pcm, np.float32)
-            a = a[max(0, int((clip["voiced_start"] - 0.06) * SR)):int((clip["voiced_end"] + 0.12) * SR)].copy()
-            f = min(len(a), int(0.02 * SR))
-            a[:f] *= np.linspace(0, 1, f)
-            a[len(a) - f:] *= np.linspace(1, 0, f)
-            at = int((ln["start"] - 0.06) * SR)
+            lo, hi, shift = ln["audio"]
+            seg, at = a[int(lo * SR):int(hi * SR)], int(round((lo + shift) * SR))
             if at < 0:
-                a, at = a[-at:], 0
-            end = min(n, at + len(a))
-            buf[at:end] += a[:end - at]
-        raw = dest.with_suffix(".raw.wav")
-        subprocess.run(["ffmpeg", "-v", "error", "-y", "-f", "f32le", "-ar", str(SR), "-ac", "1", "-i", "-", str(raw)],
-                       input=buf.tobytes(), check=True)
-        if not any(ln["clip"] for ln in self.lines):
-            raw.replace(dest)
-            return
-        meas = subprocess.run(["ffmpeg", "-hide_banner", "-i", str(raw), "-af",
-                               "loudnorm=I=-16:TP=-1.5:LRA=11:print_format=json", "-f", "null", "-"],
-                              capture_output=True, text=True).stderr
-        m = json.loads(meas[meas.rindex("{"):meas.rindex("}") + 1])
-        af = (f"loudnorm=I=-16:TP=-1.5:LRA=11:measured_I={m['input_i']}:measured_TP={m['input_tp']}:"
-              f"measured_LRA={m['input_lra']}:measured_thresh={m['input_thresh']}:offset={m['target_offset']}:linear=true")
-        subprocess.run(["ffmpeg", "-v", "error", "-y", "-i", str(raw), "-af", af, "-ar", str(SR), str(dest)], check=True)
-        raw.unlink()
+                seg, at = seg[-at:], 0
+            buf[at:at + len(seg)] += seg[:max(0, len(buf) - at)]
+        _media.write_wav(dest, buf, SR)
 
     def timeline(self) -> dict:
         return {"video": str(self.out), "fps": self.fps, "canvas": [self.W, self.H], "total": self.total,
@@ -419,7 +368,7 @@ class Cut:
                 "subtitles": str(self.out.with_suffix(".srt")) if self.e.get("subtitles") else None,
                 "captions": [{k: c[k] for k in ("text", "show", "hide")} for c in self.captions],
                 "chips": self.chips,
-                "lines": [{"text": ln["text"], "say": ln["say"], "start": ln["start"], "end": ln["end"]} for ln in self.lines]}
+                "lines": [{k: ln[k] for k in ("text", "start", "end")} for ln in self.lines]}
 
     def render(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -503,13 +452,26 @@ def self_test() -> int:
                                                                {"play": [4, 6], "chip": "auto"}],
                            "outlines": [{"src": [0.4, 1.8], "mark": "row"}]},
                           {"take": "takes/t2.mp4", "pieces": [{"play": [0, 2]}]}],
-                "lines": [{"text": "A synthetic page. A row is outlined.", "at": 0.2, "dur": 2.0},
-                          {"text": "Two seconds later, a narrower take.", "at": 2.9, "dur": 2.4}]}
+                "voice": "voice.json", "lines": [{"id": "a", "at": 0.2}, {"id": "b", "at": 3.2}]}
+        (d / "script.json").write_text(json.dumps([
+            {"id": "a", "chapter": "one", "show": "A synthetic page. A row is outlined."},
+            {"id": "b", "chapter": "two", "show": "Two seconds later, a narrower take."}]))
+        subprocess.run([str(here / "narrate.py"), str(d / "script.json"), "--voice", "captions"], check=True,
+                       capture_output=True)
+        voice = json.loads((d / "voice.json").read_text())
+        t = np.arange(int(voice["duration"] * SR)) / SR
+        _media.write_wav(d / "narration.wav", sum(0.3 * np.sin(2 * np.pi * 220 * t) * ((t >= ln["start"]) & (t < ln["end"]))
+                                                   for ln in voice["lines"]), SR)
         ep = d / "edit.json"
         ep.write_text(json.dumps(edit))
         fails = []
         c = Cut(ep)
         c.render()
+        a = _media.samples(d / "cut.mp4", SR)
+        sound = np.abs(a[:len(a) // 480 * 480]).reshape(-1, 480).max(axis=1) > 0.05
+        rises = (np.flatnonzero(np.diff(sound.astype(int)) == 1) + 1) / 100
+        if [round(r, 1) for r in rises] != [0.2, 3.2]:
+            fails.append(f"line audio starts at {rises} s, not at the lines' at 0.2 and 3.2 s")
         tl = json.loads((d / "timeline.json").read_text())
         if abs(tl["scale"] - 1.25) > 1e-9:
             fails.append(f"scale {tl['scale']} != 1.25 (the largest that fits 640x400 in 800x500)")
@@ -539,14 +501,15 @@ def self_test() -> int:
             fails.append(f"soft subtitles: streams {subs}, srt {srt[:80]!r}")
         if json.loads((d / "timeline.json").read_text())["scale"] != 1.0:
             fails.append("a full-canvas slot at scale 1.0 did not keep native pixels")
-        bad = dict(edit, caption_box=[0, 400, 960, 200])
-        ep.write_text(json.dumps(bad))
-        try:
-            Cut(ep)
-            fails.append("a caption box over the page slot was accepted")
-        except SystemExit as e:
-            if e.code != 2:
-                fails.append(f"caption box over the page: exit {e.code}, want 2")
+        for bad, why in ((dict(edit, caption_box=[0, 400, 960, 200]), "a caption box over the page slot"),
+                         (dict(edit, lines=[{"id": "nope"}]), "a line voice.json does not have")):
+            ep.write_text(json.dumps(bad))
+            try:
+                Cut(ep)
+                fails.append(f"{why} was accepted")
+            except SystemExit as e:
+                if e.code != 2:
+                    fails.append(f"{why}: exit {e.code}, want 2")
     print("cut.py self-test: " + ("PASS" if not fails else "FAIL\n  " + "\n  ".join(fails)))
     return 0 if not fails else 1
 

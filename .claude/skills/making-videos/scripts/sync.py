@@ -79,14 +79,6 @@ def cue_starts(video: Path) -> list[float]:
     return out
 
 
-def audio(video: Path) -> np.ndarray | None:
-    if not _media.probe(video)["audio"]:
-        return None
-    pcm = subprocess.run(["ffmpeg", "-v", "error", "-i", str(video), "-vn", "-ac", "1", "-ar", str(SR), "-f", "f32le", "-"],
-                         capture_output=True, check=True).stdout
-    return np.frombuffer(pcm, np.float32).copy()
-
-
 def onsets(a: np.ndarray, hop=0.01, thr_db=-40.0, quiet=0.08) -> np.ndarray:
     n = int(hop * SR)
     fr = a[: len(a) // n * n].reshape(-1, n)
@@ -100,15 +92,6 @@ def onsets(a: np.ndarray, hop=0.01, thr_db=-40.0, quiet=0.08) -> np.ndarray:
                 out.append(i * hop)
             run = 0
     return np.array(out)
-
-
-def heard_words(a: np.ndarray) -> list[dict]:
-    import os
-
-    from faster_whisper import WhisperModel  # noqa: PLC0415
-    model = WhisperModel(os.environ.get("WHISPER_MODEL", "small.en"), device="cpu", compute_type="int8")
-    segs, _ = model.transcribe(a, language="en", beam_size=5, word_timestamps=True, condition_on_previous_text=False)
-    return [{"w": w.word.strip(), "start": w.start, "end": w.end} for s in segs for w in s.words]
 
 
 def run(timeline: Path, video: Path | None, out: Path, limit: float, words_file: Path | None):
@@ -130,13 +113,13 @@ def run(timeline: Path, video: Path | None, out: Path, limit: float, words_file:
         cand = [f for f in events if f > used and abs(f / fps - c["show"]) <= WINDOW]
         if cand:
             first[i] = used = cand[0]
-    a = audio(video)
+    a = _media.samples(video, SR) if _media.probe(video)["audio"] else None
     if words_file:
         heard, source = json.loads(Path(words_file).read_text()), f"word times from {words_file} (not heard from the export)"
     elif a is None:
         raise SystemExit("sync.py: the export has no audio to listen to")
     else:
-        heard, source = heard_words(a), "local faster-whisper on the export's audio"
+        heard, source = _media.heard_words(a), "local faster-whisper on the export's audio"
     ons = onsets(a) if a is not None else np.array([])
     exp, cap_first = [], []
     for c in caps:

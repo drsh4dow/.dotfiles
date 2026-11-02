@@ -1,4 +1,5 @@
-"""Shared helpers: the timeline contract, frame decoding by index, and synthetic media for self-tests.
+"""Shared helpers: the timeline contract, frame decoding by index, audio samples, local speech recognition, and
+synthetic media for self-tests.
 
 The timeline (timeline.json) is the seam between any cutter and the checks. cut.py writes it; a cutter of
 your own can write the same shape and every check still runs. All times are seconds, all boxes are
@@ -20,7 +21,9 @@ A shot's view is where the take's whole viewport sits in the export; framing.py 
 """
 from __future__ import annotations
 
+import functools
 import json
+import os
 import subprocess
 from pathlib import Path
 
@@ -78,6 +81,30 @@ def decode(path, every: int = 1, crop: tuple | None = None):
         rc = proc.wait()
     if rc != 0:
         raise SystemExit(f"ffmpeg decode of {path} failed")
+
+
+def samples(path, sr: int) -> np.ndarray:
+    """Mono float32 samples of any audio or video file, resampled to sr Hz."""
+    pcm = subprocess.run(["ffmpeg", "-v", "error", "-i", str(path), "-vn", "-ac", "1", "-ar", str(sr), "-f", "f32le", "-"],
+                         capture_output=True, check=True).stdout
+    return np.frombuffer(pcm, np.float32).copy()
+
+
+def write_wav(path, a: np.ndarray, sr: int) -> None:
+    subprocess.run(["ffmpeg", "-v", "error", "-y", "-f", "f32le", "-ar", str(sr), "-ac", "1", "-i", "-", str(path)],
+                   input=np.asarray(a, np.float32).tobytes(), check=True)
+
+
+@functools.cache
+def _whisper():
+    from faster_whisper import WhisperModel  # noqa: PLC0415
+    return WhisperModel(os.environ.get("WHISPER_MODEL", "small.en"), device="cpu", compute_type="int8")
+
+
+def heard_words(audio: np.ndarray) -> list[dict]:
+    """Words local faster-whisper hears in 16 kHz mono samples; the audio never leaves the machine."""
+    segs, _ = _whisper().transcribe(audio, language="en", beam_size=5, word_timestamps=True, condition_on_previous_text=False)
+    return [{"w": w.word.strip(), "start": w.start, "end": w.end} for s in segs for w in s.words]
 
 
 def frames_near(path, t: float, fps: float, w: int, h: int, n: int = 3) -> list[Image.Image]:
