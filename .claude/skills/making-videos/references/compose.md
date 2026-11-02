@@ -16,6 +16,8 @@ The user's favourite is 3Blue1Brown with code aesthetics. Offer the look as its 
 
 - A dark stage. One meaning per colour for the whole film, set in `src/theme.ts`.
 - Labels 26 px and up, file and terminal text 22 px and up, captions 36 px in a 150 px band, when it plays on a big screen. Shared parts follow the same floor: a 17 px terminal title in a shared part was flagged by four watchers.
+- The size floors are for a full-screen 1080p player. For a smaller player, such as a docs page, scale them by 1920 divided by the player's width, and keep a terminal to about 80 columns.
+- Hold new text at least 1 s per 3 words, and keep command output up until the voice has covered it.
 - Few words. Put each label on the thing it names, in the audience's words, never an internal enum name. Never repeat the narration as on-screen text. No bullet lists, no tables, no boxes with nothing connecting them.
 - Eased entrances of 12 to 20 frames. No bouncing, spinning or flashing.
 - Bright footage inside a dark design dissolves into the next picture. Start the incoming picture when the outgoing fade starts. A fade through the empty stage once dropped brightness from 165 to 14 for a quarter second, and it survived two polish rounds because nested parts had their own fades.

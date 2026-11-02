@@ -15,7 +15,7 @@ Each rule cost the user at least one round of rework. They outrank every brief, 
 - **The whole screen at one scale.** "the browser view should be complete, the full browser, not a zoom in that looks like shit." A web app is the full browser window, tabs and address bar included, at 1:1. A phone is its whole screen with the status and navigation bars, at one scale for the whole video. Words go outside the picture or in a subtitle track.
 - **Voice first, live at 1.0×.** "also the pacing is awful." Voice the script, then drive or animate to the words, so each action lands as its line names it. The one edit to time is a jump cut over a real wait, with the measured time said or shown ("about 40 s later").
 - **No weird pauses.** Quiet gaps of 0.12 to 0.5 s between lines and under 0.6 s inside one. Something on screen moves at least every 2 s. Speech runs about 150 to 175 words a minute. A caption stays up at least 1.5 s plus 0.3 s per word.
-- **Clear for this audience.** Name who watches, what they already know, and where it plays. For first-time viewers, show where each control is before using it and define each term in their words. Say what happens behind the screen, not only where to tap.
+- **Clear for this audience.** Name who watches, what they already know, and where it plays. For first-time viewers, say where each control is before using it, define each term in their words, and hold each new screen long enough to read before acting on it. Say what happens behind the screen, not only where to tap.
 - **Looks are judged by eyes.** A structural checklist passed a video the user called "aesthetically a total failure". Show the user one finished chapter in its final framing before the full cut. Offer the look and the voice as separate picks, the voice as two or three rendered samples to hear. For composed films the user's favourite look is 3Blue1Brown with code aesthetics.
 - **A separate watcher before "ready".** "a subagent must also watch it before claim is ready to correct anything". A false or unshown claim blocks the cut. Polish never does, and the user's approval of a cut ends polishing.
 - **One clear file, opened.** "where are the final videos? open its folder with xdg-open". See Handoff.
@@ -48,7 +48,7 @@ Copy these into your todo list. Each ends on its done-when.
 - Finals go in `~/Videos/<project>/`, sources in `~/Videos/<project>/src/`. A disk cleanup once wiped every source of a video kept under `/tmp`.
 - Write `README.md` beside the final: path and sha256, length, chapters, how it was made (what is real, staged or masked), known gaps, the watcher verdict with its sha256, and "human listening pass: not measured".
 - Delete superseded cuts or mark them in the README. Give the user videos only, never an intermediate file such as a script or a timeline.
-- For a PR or ticket, upload the file with the **dumpfile** skill, download it again, compare sha256, and link the URL.
+- For a PR or ticket, upload the file (the **dumpfile** skill, or the tracker's own upload), download it again, compare sha256, and link the URL.
 
 ## Machine
 

@@ -43,9 +43,10 @@ graders:
     type: llm
     focus: {source: file, path: PLAN.md}
     criteria: >-
-      PASS only if the plan has a music bed kept well under the narration (ducked or a stated level below the
-      voice), states a loudness target, and burns captions in or otherwise makes them readable in the room.
-      FAIL if music level or captions are not addressed.
+      PASS only if the plan states a loudness target for the narration, makes captions readable in the room
+      (burned in, or another stated way), and, if it uses music at all, keeps the music well under the voice
+      (ducked, or a stated level below it). FAIL if loudness or captions are not addressed, or if music is
+      planned with no level relative to the voice.
   - name: reviewed-and-handed-off
     type: llm
     focus: {source: file, path: PLAN.md}

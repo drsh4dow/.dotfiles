@@ -35,10 +35,12 @@ graders:
     type: llm
     focus: {source: file, path: PLAN.md}
     criteria: >-
-      PASS only if, wherever the plan stages or fakes something (test data, a replayed "today" flow, a
-      stand-in window, a hidden field), the narration or on-screen text itself tells the viewer so. A note in a
-      README or the plan alone does not count. PASS also if the plan stages nothing at all and says so. FAIL if
-      staged material would play without the viewer being told.
+      Staging here means anything that changes what the product appears to do or show: a replayed or
+      re-enacted "today" flow, a stand-in or mock window, fields hidden or painted over, or seeded test data
+      presented as real. Privacy masks over personal data, closed banners, and picking which records to show do
+      not count. PASS only if every staging choice the plan makes is told to the viewer in the narration or
+      on-screen text itself; a note in a README or the plan alone does not count. PASS also if the plan stages
+      nothing. FAIL if staged material would play without the viewer being told.
   - name: voice-picked-and-locked
     type: llm
     focus: {source: file, path: PLAN.md}
