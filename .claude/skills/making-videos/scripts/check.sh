@@ -2,7 +2,7 @@
 # Audio and picture checks on an exported video.
 #
 #   check.sh VIDEO.mp4 [--profile narrated|captions] [--timeline T.json] [--out DIR] [--dead-air 1.0] [--between 0.5]
-#            [--inline 0.6] [--sheet-every 2]
+#            [--inline 0.6] [--area W:H:X:Y] [--dip 0.25] [--dip-window 1.0] [--sheet-every 2]
 #   check.sh --self-test
 #
 # Profiles: narrated (the default) runs every check, and fails a video with no audio stream. captions, for a
@@ -14,6 +14,10 @@
 # - quiet gaps, when a timeline names the narration lines: a quiet span (-35 dB, >= 0.1 s) between lines over
 #   --between s, or inside one line over --inline s;
 # - loudness (EBU R128 integrated, LRA, true peak), reported, never failed;
+# - dark dips: a frame whose mean brightness over the picture area (--area, ffmpeg crop syntax, default the whole
+#   frame) is more than --dip (a fraction) below the brightest frame both in the --dip-window s before it and in
+#   the --dip-window s after it. A fade through black dips, and so do an outgoing fade and a late incoming fade
+#   that leave the background showing between them. A cross-dissolve does not;
 # - contact sheets of frames picked by index every --sheet-every s (frames.py).
 # Exit 1 when an applicable check fails, 0 otherwise.
 set -euo pipefail
@@ -35,6 +39,10 @@ self_test() {
   ffmpeg -v error -f lavfi -i color=c=gray:s=320x200:r=30:d=3 -f lavfi -i anullsrc=r=48000:cl=mono -t 3 "${enc[@]}" "$d/dead.mp4"
   ffmpeg -v error -f lavfi -i testsrc2=s=320x200:r=30:d=4 -f lavfi \
     -i "sine=f=330:d=4,volume='if(between(t,1.5,2.5),0,1)':eval=frame" -shortest "${enc[@]}" "$d/gap.mp4"
+  for x in fadeblack fade; do
+    ffmpeg -v error -f lavfi -i color=c=0xd0d0d0:s=320x200:r=30:d=3 -f lavfi -i color=c=0xa0a0a0:s=320x200:r=30:d=3 \
+      -filter_complex "[0][1]xfade=transition=$x:duration=0.6:offset=2.2" "${enc[@]}" "$d/$x.mp4"
+  done
   printf '{"lines":[{"text":"a","start":0.1,"end":1.5},{"text":"b","start":2.5,"end":3.9}]}' > "$d/gap.json"
   expect 0 "moving picture with steady sound failed" "$d/good.mp4" --out "$d/c1"
   ls "$d"/c1/sheet-*.jpg > /dev/null 2>&1 || { echo "  no contact sheet written"; rc=1; }
@@ -44,17 +52,19 @@ self_test() {
   grep -q "needs an audio stream" "$d/last.txt" || { echo "  no clear verdict on a video with no audio"; rc=1; }
   expect 0 "captions-only: a video with no audio failed" "$d/mute.mp4" --profile captions --out "$d/c5"
   expect 0 "captions-only: a frozen, silent hold failed" "$d/dead.mp4" --profile captions --out "$d/c6"
+  expect 1 "a fade through black passed" "$d/fadeblack.mp4" --profile captions --out "$d/c7"
+  expect 0 "a cross-dissolve failed" "$d/fade.mp4" --profile captions --out "$d/c8"
   [ "$rc" = 0 ] && echo "check.sh self-test: PASS" || echo "check.sh self-test: FAIL"
   return "$rc"
 }
 
 case "${1:-}" in
-  ""|-h|--help) sed -n '2,18p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+  ""|-h|--help) sed -n '2,22p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
   --self-test) self_test; exit $? ;;
 esac
 
 V="$(realpath "$1")"; shift
-T="" OUT="" PROFILE=narrated DEAD=1.0 BETWEEN=0.5 INLINE=0.6 EVERY=2
+T="" OUT="" PROFILE=narrated DEAD=1.0 BETWEEN=0.5 INLINE=0.6 AREA=iw:ih:0:0 DIP=0.25 DIPWIN=1.0 EVERY=2
 while [ $# -gt 0 ]; do
   case "$1" in
     --profile) PROFILE="$2"; shift 2 ;;
@@ -63,6 +73,9 @@ while [ $# -gt 0 ]; do
     --dead-air) DEAD="$2"; shift 2 ;;
     --between) BETWEEN="$2"; shift 2 ;;
     --inline) INLINE="$2"; shift 2 ;;
+    --area) AREA="$2"; shift 2 ;;
+    --dip) DIP="$2"; shift 2 ;;
+    --dip-window) DIPWIN="$2"; shift 2 ;;
     --sheet-every) EVERY="$2"; shift 2 ;;
     *) echo "check.sh: unknown argument $1" >&2; exit 2 ;;
   esac
@@ -73,7 +86,7 @@ mkdir -p "$C"
 rm -f "$C"/silencedetect*.log "$C"/ebur128.log
 ffprobe -v error -show_entries format=duration,size,bit_rate:stream=codec_type,codec_name,width,height,r_frame_rate,sample_rate,channels -of json "$V" > "$C/ffprobe.json"
 ffmpeg -hide_banner -nostats -i "$V" -map 0:v -fps_mode passthrough -f null \
-  -vf "freezedetect=n=-50dB:d=$DEAD" - 2> "$C/picture.log"
+  -vf "freezedetect=n=-50dB:d=$DEAD,crop=$AREA,signalstats,metadata=print:key=lavfi.signalstats.YAVG" - 2> "$C/picture.log"
 if grep -q '"codec_type": "audio"' "$C/ffprobe.json"; then
   ffmpeg -hide_banner -nostats -i "$V" -af "silencedetect=noise=-35dB:d=$DEAD" -map 0:a -f null - 2> "$C/silencedetect.log"
   ffmpeg -hide_banner -nostats -i "$V" -af "silencedetect=noise=-35dB:d=0.1" -map 0:a -f null - 2> "$C/silencedetect-0.1s.log"
@@ -81,11 +94,13 @@ if grep -q '"codec_type": "audio"' "$C/ffprobe.json"; then
 fi
 
 set +e
-python3 - "$C" "$PROFILE" "$DEAD" "$BETWEEN" "$INLINE" "${T:-}" <<'EOF'
+python3 - "$C" "$PROFILE" "$DEAD" "$BETWEEN" "$INLINE" "$DIP" "$DIPWIN" "${T:-}" <<'EOF'
 import json, os, re, sys
-c, profile, (dead, between, inline), tpath = sys.argv[1], sys.argv[2], map(float, sys.argv[3:6]), sys.argv[6]
+c, profile, (dead, between, inline, dip, dipwin), tpath = sys.argv[1], sys.argv[2], map(float, sys.argv[3:8]), sys.argv[8]
 probe = json.load(open(f"{c}/ffprobe.json"))
 dur = float(probe["format"]["duration"])
+num, den = next(s for s in probe["streams"] if s["codec_type"] == "video")["r_frame_rate"].split("/")
+fps = int(num) / int(den)
 def spans(path, a, b):
     txt = open(path).read()
     s = [float(x) for x in re.findall(a + r":\s*([\d.]+)", txt)]
@@ -132,6 +147,24 @@ else:
                 *[f"    {a:.3f}-{b:.3f} ({b - a:.3f} s)" for a, b in inl if b - a > inline],
                 f"  lead-in and tail: {len(edge)}", *[f"    {a:.3f}-{b:.3f}" for a, b in edge]]
         bad = bad or wb > between or wi > inline
+y = [float(v) for v in re.findall(r"YAVG=([\d.]+)", open(f"{c}/picture.log").read())]
+w = max(1, round(dipwin * fps))
+before = lambda i: max(y[max(0, i - w):i], default=0.0)
+after = lambda i: max(y[i + 1:i + 1 + w], default=0.0)
+depth = [(1 - v / r if r - v > 3 else 0.0) for v, r in ((v, min(before(i), after(i))) for i, v in enumerate(y))]
+runs = []
+for i, d in enumerate(depth):
+    if d > dip:
+        if runs and runs[-1][1] == i - 1:
+            runs[-1][1] = i
+        else:
+            runs.append([i, i])
+worst = max(range(len(y)), key=lambda i: depth[i])
+out += [f"dark dips (more than {dip:.0%} below the brightest frame within {dipwin} s on both sides): "
+        f"{'FAIL' if runs else 'PASS'}, {len(runs)}; worst {depth[worst]:.1%} at {worst / fps:.2f} s",
+        *[f"  {a / fps:.2f}-{(b + 1) / fps:.2f} s: low {min(y[a:b + 1]):.1f}, {before(a):.1f} before, {after(b):.1f} after"
+          for a, b in runs]]
+bad = bad or bool(runs)
 open(f"{c}/checks.txt", "w").write("\n".join(out) + "\n")
 print("\n".join(out))
 sys.exit(1 if bad else 0)
