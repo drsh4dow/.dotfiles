@@ -20,8 +20,10 @@ frames the timeline marks caption-free, so a late caption does not count as empt
 subtitles (timeline "subtitles", or a VIDEO with a subtitle track), each cue's start and end are read from the
 export's own subtitle track instead. The timeline only says which caption should appear near which time (within
 WINDOW s), never what time to report.
-Holds (both profiles): each caption must stay on screen at least --hold-base s plus --per-word s per word, and
-end a sentence (. ! ? or ...), so no sentence is split across captions. A caption that never shows fails.
+Holds (captions profile): each caption must stay on screen at least --hold-base s plus --per-word s per word, and
+end a sentence (. ! ? or ...), so no sentence is split across captions. A caption that never shows fails. The
+narrated profile reports how long each caption holds and fails none: a narrated caption lasts as long as its
+spoken clause, and narrate.py splits captions at clauses on purpose.
 Sync (narrated profile only; captions reports it not applicable): faster-whisper (WHISPER_MODEL, default
 small.en; CPU, int8) transcribes the export's audio with word timestamps. The audio never leaves the machine.
 Each caption's first word is found by aligning caption tokens with heard tokens; its onset is the last rise of
@@ -129,18 +131,21 @@ def run(d: dict, video: Path | None, out: Path, limit: float, words_file: Path |
                  "" if re.search(r"[.!?…][\"'”’)\]]*$", c["text"].strip()) else "split mid-sentence"]
         holds.append({"i": i, "text": c["text"], "shown": None if f0 is None else f0 / fps, "held": held,
                       "need": round(need, 3), "note": "; ".join(n for n in notes if n)})
-    bad_holds = [h for h in holds if h["note"]]
+    bad_holds = [h for h in holds if h["note"]] if profile == "captions" else []
     tight = min((h for h in holds if h["held"] is not None), key=lambda h: h["held"] - h["need"], default=None)
     f = lambda v: "—" if v is None else f"{v:.3f}"  # noqa: E731
     md = ["# Caption checks on the export", "", f"Video: {video}. Captions: {where}. Profile: {profile}.", "",
-          "## Holds", "", f"Each caption on screen at least {base} s plus {per_word} s per word, ending a sentence.",
+          "## Holds", "", f"Each caption on screen at least {base} s plus {per_word} s per word, ending a sentence."
+          if profile == "captions" else f"Each caption's hold against {base} s plus {per_word} s per word.",
           f"Captions shown: {len(span)} of {len(caps)}. Failing: {len(bad_holds)}. "
           + (f"Worst margin: {tight['held'] - tight['need']:+.2f} s at {f(tight['shown'])} s, '{tight['text'][:60]}'."
              if tight else "Worst margin: not measured."), "",
           "| # | Shown (s) | Held (s) | Needs (s) | Caption | Note |", "| --- | --- | --- | --- | --- | --- |",
           *[f"| {h['i']} | {f(h['shown'])} | {f(h['held'])} | {h['need']:.2f} | {h['text'][:70]} | {h['note']} |"
             for h in holds],
-          "", f"Holds: {'PASS' if not bad_holds else 'FAIL'}", "", "## Sync", ""]
+          "", f"Holds: {'PASS' if not bad_holds else 'FAIL'}" if profile == "captions"
+          else "Holds: reported, not failed, because a narrated caption lasts as long as its spoken clause.", "",
+          "## Sync", ""]
     report = {"video": str(video), "spans": spans, "holds": holds}
     out.mkdir(parents=True, exist_ok=True)
     if profile == "captions":
@@ -263,7 +268,9 @@ def self_test() -> int:
             ("captions shown on their words", burned("ontime", caps), (True, True)),
             ("thin text with no box, fading in over 4 frames", burned("thin", caps, fade=4), (True, True)),
             ("a caption 0.6 s late", burned("late", late), (True, False)),
-            ("a caption that never appears", burned("missing", [caps[0], caps[2]]), (False, False)),
+            ("a caption that never appears", burned("missing", [caps[0], caps[2]]), (True, False)),
+            ("narrated, a clause held 1.4 s of the 2.1 s a caption would need",
+             burned("clause", clause := [caps[0], ("Bravo two", 2.8, 4.2), caps[2]], clause), (True, True)),
             ("captions-only, a caption held 1.4 s of the 2.1 s it needs",
              burned("short", [caps[0], ("Bravo two.", 2.8, 4.2), caps[2]], profile="captions"), (False, None)),
             ("captions-only, a caption already on screen at frame 0",
