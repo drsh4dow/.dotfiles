@@ -186,10 +186,10 @@ Write the body to a file and run both gates.
 
    Run this read yourself even when you run as a subagent, and publish only after it has run. Only when your session has no Agent tool, write the files, publish nothing, and name the read in your report for your parent to run.
 
-Publish the same file with `scripts/publish-pr.ts create <body-file> --title "<title>"` or `scripts/publish-pr.ts edit <number> <body-file> --title "<title>"`, never with a bare `gh pr create --body-file` or `gh pr edit --body-file`. Both verbs take `--repo` and `--template`, and `create` also takes `--base`, `--head`, and `--draft`. Pass `--draft` when step 1 says to keep the PR a draft. Keep the title out of the body file.
+Publish the same file with `scripts/publish-pr.ts create <body-file> --title "<title>"` or `scripts/publish-pr.ts edit <number> <body-file> --title "<title>"`, never with a bare `gh pr create --body-file` or `gh pr edit --body-file`. Both verbs take `--repo` and `--template`, `create` also takes `--base`, `--head`, and `--draft`, and `edit` also takes `--replace`. Pass `--draft` when step 1 says to keep the PR a draft. Keep the title out of the body file.
 
 - It reruns check-body and calls `gh` only after check-body exits 0.
-- On `edit`, it keeps each `## ` section that the live body has and the file lacks, such as a plan a bot appended, after the section it followed in the live body, and prints `publish-pr: kept "## <heading>" from the live body` for each. If you deleted that section on purpose, say so in your report.
+- On `edit`, it keeps each `## ` section that the live body has and the file lacks, such as a plan a bot appended, after the section it followed in the live body, and prints `publish-pr: kept "## <heading>" from the live body` for each. To delete such a section on purpose, pass `--replace`, so the file replaces the live body whole, and say so in your report.
 - It reads the PR back and compares it with what it sent, ignoring line ends and trailing newlines. On a difference it prints the changed lines.
 
 Its exit code is 0 when the PR is published and reads back the same, 1 when check-body found problems, 64 for a bad argument or an unreadable body or template file, 2 when a `gh` call failed or check-body could not run, and 3 when the readback differs.
