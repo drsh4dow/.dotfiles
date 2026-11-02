@@ -1,127 +1,72 @@
 ---
-name: ui-walkthrough-video
-description: "Building blocks for a recorded UI walkthrough: drive a live web app like a real user in an agent-owned browser, record it, cut it with optional narration, and check the export before calling it ready. Use when the user asks for a recorded UI walkthrough, a demo video of UI work, or video proof of a UI change. Not a recap of past work."
-disable-model-invocation: false
-user-invocable: true
+name: making-videos
+description: "Narrated videos end to end: brief, script, voice, capture of a web, Android or iOS app, composed motion graphics, cut, mix, and checks on the exported file. Use when the user asks for a video, walkthrough, demo, tutorial, promo, or recorded proof of a change."
 ---
 
-# UI walkthrough video
+# Making videos
 
-A recorded UI walkthrough shows the real product doing the thing, driven the way a person would use it.
-
-These are blocks, not a pipeline. Pick the ones the video needs, in the order that suits it, and design the layout for the video in front of you. [references/example-layout.md](references/example-layout.md) shows one session's layout, as an example only. Two parts are fixed whatever you build: the user's rules below, and the checks on the export.
+A video here is a script voiced first, a picture cued to that voice, one cut, and checks on the file the viewer will watch. Pick the blocks the video needs. The user's rules and the checks on the export apply to every video.
 
 ## The user's rules
 
-These came from the user's complaints. Each rule cost a round of rework the first time.
+Each rule cost the user at least one round of rework. They outrank every brief, including one you wrote.
 
-- **Real use, good pacing, a separate watcher.** "I want good pacing, not pauses in between, I want real user behavior, and I want a pleasant visualization of the real thing, a subagent must also watch it before claim is ready to correct anything, viusal verification in UI work is paramount". So: a visible pointer, human typing and wheel scrolling, and no dead air (no span over 1.0 s that is both frozen and silent). Backend waits become jump cuts.
-- **The whole page, always.** "ok I hate it, it should display the full page, like wtf, Why would it shows the zoom in thing? that is not clear". The page shows each take's whole viewport at one fixed scale and place. Never zoom, pan or crop it. Captions and labels sit outside the page.
-- **The full browser window, at native pixels.** "the browser view should be complete, the full browser, not a zoom in that looks like shit." When the video shows a web app, record the whole browser window (tabs, address bar and page) at the OS level, sized to fill the frame (1920x1080 including the chrome), and cut it at scale 1.0 with nothing around it. No upscaling, no rail, no slot smaller than the frame. Captions go in a toggleable subtitle track (`"subtitles": true`), not burned in. If a check can only run on burned-in captions, add a band below the window; never shrink the window to make room. [`scripts/window.py`](scripts/window.py) records and drives such a window.
-- **Voice first, live at 1.0×.** "also the pacing is awful." Render the narration first, then drive the browser live at 1.0×, timed to the lines, so each action lands as its words are spoken. No speed ramps and no freeze holds. The only cuts are clean jump cuts over real backend waits. Pointer and typing move at natural human speed, and the beats breathe.
-- **Proof over polish.** "do not worry about it, I care more about the real product proof rather than the quality of the video itself." Then: "I love the video, what are the issues that are blocking you?" A false or unshown claim blocks the cut. Polish never does, and the user's approval of a cut ends polishing.
-- **One clear file.** "give me the full path of the video", then "what is the difference? which one is the newest and best?" See Handoff.
+- **Real product, real data.** "I care more about the real product proof rather than the quality of the video itself." Record the real thing doing the work. Every fact the video states or draws traces to a file, a run, or a receipt in `CLAIMS.md`. Label what is staged or drawn. Use synthetic records only where a real one would expose a person.
+- **The whole screen at one scale.** "the browser view should be complete, the full browser, not a zoom in that looks like shit." A web app is the full browser window, tabs and address bar included, at 1:1. A phone is its whole screen with the status and navigation bars, at one scale for the whole video. Words go outside the picture or in a subtitle track.
+- **Voice first, live at 1.0×.** "also the pacing is awful." Voice the script, then drive or animate to the words, so each action lands as its line names it. The one edit to time is a jump cut over a real wait, with the measured time said or shown ("about 40 s later").
+- **No weird pauses.** Quiet gaps of 0.12 to 0.5 s between lines and under 0.6 s inside one. Something on screen moves at least every 2 s. Speech runs about 150 to 175 words a minute. A caption stays up at least 1.5 s plus 0.3 s per word.
+- **Clear for this audience.** Name who watches, what they already know, and where it plays. For first-time viewers, show where each control is before using it and define each term in their words. Say what happens behind the screen, not only where to tap.
+- **Looks are judged by eyes.** A structural checklist passed a video the user called "aesthetically a total failure". Show the user one finished chapter in its final framing before the full cut. Offer the look and the voice as separate picks, the voice as two or three rendered samples to hear. For composed films the user's favourite look is 3Blue1Brown with code aesthetics.
+- **A separate watcher before "ready".** "a subagent must also watch it before claim is ready to correct anything". A false or unshown claim blocks the cut. Polish never does, and the user's approval of a cut ends polishing.
+- **One clear file, opened.** "where are the final videos? open its folder with xdg-open". See Handoff.
 
-A project can add its own recording rules, such as which accounts, environments and fixtures a take may touch. Look for a recording section in the project's skills before the first take.
+## Steps
 
-## Before capture: audience and privacy
+Copy these into your todo list. Each ends on its done-when.
 
-- Name the audience (internal or external) and the identity classes allowed on screen before the first take. Examples: synthetic test clients only; staff names allowed internally; the operator's own account masked.
-- Mask before recording, never after. [`scripts/mask.js`](scripts/mask.js) covers emails and any terms in `window.__uiwMaskTerms` and redraws every 80 ms. It cannot recognise names, so list them as terms or keep them off screen.
-- Check redaction on full-resolution frames of the export (`frames.py --at`), starting at 0:00. A watcher once stopped at 0:00 on a staff email that the contact sheets had missed.
-- Transcription stays local (`sync.py` runs faster-whisper on the machine). Only narration you would publish goes to external TTS. Logs hold coordinates, labels, lengths and IDs, never typed text.
+1. **Brief.** Write `BRIEF.md` in `~/Videos/<project>/src/`: the audience and what they know, where it plays, the one sentence they leave with, length, kind, truth sources, the identities allowed on screen, and the voice. Done when you have checked it against each rule above and nothing in it contradicts one.
+2. **Script.** Write `script.json` and `CLAIMS.md` per [references/story.md](references/story.md). Done when every line has its source in `CLAIMS.md`.
+3. **Voice.** `scripts/narrate.py script.json` writes `narration.wav` and `voice.json`, the clock every later block reads. Render a chapter in two or three voices with `--voices` for the user to hear. The default is Gemini's Iapetus, then ElevenLabs' Mark, then captions only; say which one ran. Done when `voice.json` exists and its gap report passes.
+4. **Picture.** Read the reference for where the picture comes from:
 
-## Recording
+   | Picture | Read |
+   | --- | --- |
+   | A web app in a browser | [references/capture-web.md](references/capture-web.md) |
+   | An Android or iOS app | [references/capture-mobile.md](references/capture-mobile.md) |
+   | Motion graphics, a promo, an explainer, a terminal tutorial | [references/compose.md](references/compose.md) |
 
-- **The browser.** Use an agent-owned Chromium: a headless `agent-browser --session NAME`, or the shared agent browser when the project defines one. Never use the user's daily browser.
-- **One take per beat.** Each take is one mp4 of one tab at a fixed viewport, plus an `events.json` on the same clock. The recorder follows the active tab, so a second tab gets its own take. Set the viewport and inject the mask before `record start`. Any change to either needs a new take.
-- **The driver.** [`scripts/drive.py`](scripts/drive.py) is an importable `Take` class. It gives eased pointer moves, per-character typing, real wheel scrolls at the pointer, and DOM-box `mark`s an edit can outline later. Its `wait_until` is logged so the edit can jump-cut the wait. Use `with take:` so a failing step still stops the recorder and keeps the log. Without it, a crash left the recorder running and the mp4 had no index.
-- **A full-window take.** [`scripts/window.py`](scripts/window.py) runs Xvfb and a headed Chromium on its own profile, so it never captures the user's desktop. Its `WindowTake` is `Take` with an ffmpeg x11grab recorder and xdotool pointer, wheel and keys, and it logs every box in window pixels. Prove a new setup on a 5 s test clip before any take, and check one frame shows the tabs, the address bar and the pointer. Sign the window in by copying the site's cookies from a signed-in agent browser over CDP. Its self-test proves the events clock matches the frames within 0.1 s: x264's lookahead once held the frame counter back and put every event 1.1 s ahead of its picture. `hscroll` sends a sideways wheel (X buttons 6 and 7) for wide boards. A column or list that renders lazily the first time it scrolls into view showed skeletons for 1.5 s on camera: scroll it into view and back once before `record start`.
-- **Preflight.** `drive.py preflight --session S --out DIR` records 2 s of pointer motion. It fails when the window is not painting.
-- **Raw CDP.** [`scripts/cdp.mjs`](scripts/cdp.mjs):
-  - `wheel` scrolls at the pointer. agent-browser's `mouse wheel` fires at 0,0.
-  - `new-window` replaces a minimised window, which paints nothing. `mouse move` times out and the take is blank, and restoring the window does not help.
-  - Get the endpoint from `/json/version`. A browser started with `--remote-debugging-port` may write no `DevToolsActivePort`.
-- **Take provenance.** Log each take's starting state (IDs, counts), the writes it made, and the receipts it owns (`take.state`, `take.wrote`). When the cut goes back to older footage, say so inside the video (for example a "Recorded earlier" label). Once a cut replayed older footage and made a saved edit look lost. Prefer a recut or fresh read-only footage to reseeding fixtures just for the video, because reseeding has real side effects. Keep deploys and flag flips out of the recording window: one rolled the API mid-take.
-
-## Cutting
-
-- **[`scripts/cut.py`](scripts/cut.py)** builds the video from an `EDIT.json`. Its `--help` documents the file:
-  - It places every take's whole viewport in one slot at one scale.
-  - Click rings come from logged clicks, and outlines from logged marks or literal boxes.
-  - Captions, labels and "N s later" chips are drawn only outside the slot.
-  - Narration is optional, and the audio is normalised to -16 LUFS.
-  - It writes `timeline.json` and `transcript.md`. `--still T` renders one composed frame for a layout review.
-  - It exits 2 when an edit breaks a rule.
-- **Your own cutter.** Have it write the same `timeline.json` (contract in [`scripts/_media.py`](scripts/_media.py)) and every check still runs.
-- **Pacing.** Voice first: voice the lines, lay them back to back with short natural gaps (the quiet-gap check allows 0.5 s between lines), and schedule each take action at its line's start plus the offset of the word that names it. Then the cut plays the take at 1.0× from end to end, and its pieces skip only backend waits. Leave typing on screen long enough to read. Measure the quiet gaps on the export.
-- **Voice (optional).** [`scripts/tts.py`](scripts/tts.py) calls ElevenLabs with timestamps and caches each line by hash. The voice and model are the `ELEVEN_VOICE` and `ELEVEN_MODEL` constants at the top of `tts.py`. `ELEVENLABS_VOICE_ID` overrides the voice. A rebuild with `--offline` cannot re-voice by accident. With no voice, give each line a `dur` and the video is captions only.
-
-## What may be drawn over the page
-
-This is the complete allowlist: click rings and outline-only highlight boxes. Nothing else goes over the page: no cards, labels, arrows, blur, dimming or tinted fills, even over empty areas. Words go in the bands outside the slot.
-
-Prose overlay rules leaked one word per round ("brief cards over empty areas", a blurred close, "translucent" outlines read as tinted). That took 8 watch passes and 7 fix passes. [`scripts/overlays.py`](scripts/overlays.py) enforces the allowlist against the export. On every run it also proves it would catch an opaque card and a faint fill. Keep the outline colours to one meaning each across the video.
-
-## Before the full cut
-
-Before you cut the whole video or start any watcher loop, show the user one finished chapter in its final framing and wait for a yes. A `--still` frame plus a short clip is enough. Watchers check the brief, not the user's taste. A zoom design the brief asked for passed two watch passes and two fix passes before the user rejected it, 4.5 hours in.
-
-## Checks on the exported mp4
-
-Measure the file the user will watch, never the edit plan. Captions once "passed" against the plan while the export lagged, and a frame-rate filter scored the wrong frames. Every script picks frames by index.
-
-| Check | Script | Fails on |
-| --- | --- | --- |
-| Dead air, loudness, quiet gaps, contact sheets | `check.sh VIDEO --timeline T` | a span over 1.0 s both frozen and silent; a quiet span over 0.5 s between lines or 0.6 s inside one |
-| Whole viewport, one scale | `framing.py T` | any sampled frame that a 1.1× zoom or an 8 px shift matches better; takes at different scales |
-| Overlay allowlist | `overlays.py T` | a foreign tile outside the marks; a tinted outline interior; a self-test the detector misses |
-| Caption sync | `HF_HUB_OFFLINE=1 sync.py T` | a caption's first frame (or soft-subtitle cue) more than 0.3 s from its first spoken word; a caption that never shows |
-| Frames for eyes | `frames.py VIDEO --at/--around/--every` | nothing; it picks the frames you look at |
-
-Then check by eye what no script covers:
-
-- Each narrated claim against the visible action and state. Synced captions once narrated dates the UI had not selected yet.
-- Redaction on full-resolution frames.
-- Report the human listening pass as `not measured`. Speech recognition checks spelling, not how it sounds.
-
-## Watcher
-
-A separate subagent reviews each export before anyone calls it ready. Launch a fresh one with the Agent tool on `model: opus`, with the filled brief from [references/watcher-brief.md](references/watcher-brief.md) as its prompt. It sees none of this conversation, so the brief carries every path and claim:
-
-- A false or unshown narrated claim is a blocker; polish is a nit.
-- The verdict names the export's sha256, and a new export needs a new watch.
-- When the user asked for an independent watcher, never hand the cut to the user as its reviewer.
+   Done when you have looked at full-size frames of every take or scene yourself.
+5. **One chapter first.** Cut one chapter in its final framing, give the user its path, open it, and wait for a yes. If the user told you to run without stopping, log that you skipped the wait and show the chapter at handoff. Done on the user's yes or the logged skip.
+6. **Cut and mix.** Per [references/cut-and-mix.md](references/cut-and-mix.md). Done when the export exists and you know its sha256.
+7. **Check the export.** Run every check in [references/checks.md](references/checks.md) that applies to this video's profile. Done when each passes on the exported file.
+8. **Watch.** Brief a fresh subagent from [references/watcher-brief.md](references/watcher-brief.md) for each new sha256. Fix its blockers and should-fixes, re-export, and send the new file to a new watcher. Stop at a ready verdict or after three rounds, and report what is left.
+9. **Hand off.** Done when the user has the path and the file is open.
 
 ## Handoff
 
-Give the user one absolute path to the current cut and open it for them. Then add a small manifest with one row per video:
+- Put the absolute path of the final file on its own line, with its length and size, then open it with `xdg-open`.
+- Finals go in `~/Videos/<project>/`, sources in `~/Videos/<project>/src/`. A disk cleanup once wiped every source of a video kept under `/tmp`.
+- Write `README.md` beside the final: path and sha256, length, chapters, how it was made (what is real, staged or masked), known gaps, the watcher verdict with its sha256, and "human listening pass: not measured".
+- Delete superseded cuts or mark them in the README. Give the user videos only, never an intermediate file such as a script or a timeline.
+- For a PR or ticket, upload the file with the **dumpfile** skill, download it again, compare sha256, and link the URL.
 
-- path and sha256
-- duration and what it covers
-- the cut it supersedes
-- known gaps
-- review status (the watcher verdict and its sha256)
+## Machine
 
-Delete or clearly mark superseded files. Two of the files in one handoff were byte-identical.
+- Run one render or recording at a time, in the background. Video work has run this machine out of memory.
+- Stop every recorder, browser and emulator you start in a `finally`, and leave shared ones alone.
+- Before helpers start from a brief, run each command in it once. A wrong render flag in one brief made three helpers render the whole film.
 
 ## Scripts
 
-Everything is in `scripts/`. Each script takes parameters (no hard-coded paths or sizes), prints usage with `--help`, and has a self-test on synthetic input. `scripts/self-test` runs them all. They need ffmpeg, uv, Node 22+ and Chromium, and `window.py` also needs Xvfb and xdotool (`$CHROMIUM`, default `chromium`). Captions use `fonts/Inter-Regular.ttf` (OFL, see `fonts/Inter-OFL.txt`).
-
-Run each script as an executable, as in `scripts/sync.py VIDEO`, so its `uv run --script` shebang installs the dependencies it declares. Take frames with `frames.py` rather than your own ffmpeg command, because current ffmpeg has dropped `-vsync`.
+All in `scripts/`. Each prints `--help`, takes parameters, and has a self-test; `scripts/self-test` runs them all. Run each as an executable so its `uv run --script` shebang installs what it declares. They need ffmpeg, uv, Node 22+ and Chromium.
 
 | Script | Block |
 | --- | --- |
-| `drive.py` | human-paced driver, events log, take provenance, preflight |
-| `window.py` | full browser window on Xvfb: OS-level x11grab recorder, xdotool input, window-pixel events |
-| `cdp.mjs` | wheel at the pointer, fresh window, close, eval |
-| `mask.js` | in-page privacy mask, injected before recording |
-| `cut.py` | EDIT.json cutter: one slot, one scale, rings, outlines, burned-in or soft captions, chips, optional voice |
-| `tts.py` | ElevenLabs lines with timestamps, cached |
-| `check.sh` | dead air, quiet gaps, loudness, contact sheets |
-| `framing.py` | no zoom, pan or crop |
-| `overlays.py` | overlay allowlist, with can-fail self-tests |
-| `sync.py` | caption first frame against local ASR speech onset |
-| `frames.py` | frames by index: sheets, full-resolution stills, neighbours of a cut |
-| `_media.py` | timeline contract, decoding by index, synthetic media |
+| `narrate.py`, `tts.py` | voice: lines to `narration.wav` and `voice.json`, cached per line |
+| `window.py`, `drive.py`, `cdp.mjs`, `mask.js` | web capture: full window on Xvfb, human input, events log, privacy mask |
+| `cut.py` | cut takes from `EDIT.json`: one scale, rings, outlines, captions, chips, voice |
+| `mix` | voice plus music bed, ducked, to -16 LUFS |
+| `check.sh`, `framing.py`, `overlays.py`, `sync.py`, `dips.py`, `framediff.py` | checks on the export |
+| `frames.py` | frames by index for your eyes and the watcher's |
+
+`templates/remotion/` is the starter for composed films.

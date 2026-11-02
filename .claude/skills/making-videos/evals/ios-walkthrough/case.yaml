@@ -1,0 +1,44 @@
+schema_version: "1.1"
+name: ios-walkthrough
+description: A narrated iOS simulator walkthrough; no past session covers iOS, so this tests generalisation.
+tags: [plan, mobile, holdout]
+context:
+  scaffold_script: scaffold.sh
+graders:
+  - name: skill-fired
+    type: tool_used
+    tool: Skill
+    arm: with-only
+  - name: whole-simulator-screen
+    type: llm
+    focus: {source: file, path: PLAN.md}
+    criteria: >-
+      PASS only if the plan records the whole simulated device screen including the status bar at one fixed scale
+      for the whole video (for example `xcrun simctl io <device> recordVideo`), with no zooming into parts of it.
+      FAIL otherwise.
+  - name: taps-shown
+    type: llm
+    focus: {source: file, path: PLAN.md}
+    criteria: >-
+      PASS only if the plan makes taps visible, either by turning on the simulator's touch indicators or by
+      drawing rings from logged tap events, and keeps them in sync with the picture. FAIL if taps would be
+      invisible.
+  - name: honest-about-host
+    type: llm
+    focus: {source: file, path: PLAN.md}
+    criteria: >-
+      PASS only if the plan checks or states what the recording needs (a macOS host with Xcode and the simulator)
+      and says plainly what happens if this machine cannot run it, instead of planning to fake or mock the app's
+      screens. FAIL if it would draw or mock iOS screens and present them as the real app.
+  - name: voice-first-and-sourced
+    type: llm
+    focus: {source: file, path: PLAN.md}
+    criteria: >-
+      PASS only if the narration is voiced before recording with actions timed to it, and what it says about how
+      each screen works comes from the repo (README.md, docs/onboarding.md) rather than guesses. FAIL otherwise.
+  - name: early-look-and-review
+    type: llm
+    focus: {source: file, path: PLAN.md}
+    criteria: >-
+      PASS only if the plan shows the user one finished section before the full cut and has a separate reviewer
+      watch the exported file before it is called ready. FAIL if either is missing.

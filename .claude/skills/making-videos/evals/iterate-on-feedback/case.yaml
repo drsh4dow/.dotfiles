@@ -1,0 +1,37 @@
+schema_version: "1.1"
+name: iterate-on-feedback
+description: Redo a walkthrough after feedback about zoom, speed ramps, freezes and a narrated claim that runs early.
+tags: [plan, web, iteration]
+context:
+  scaffold_script: scaffold.sh
+graders:
+  - name: skill-fired
+    type: tool_used
+    tool: Skill
+    arm: with-only
+  - name: full-window-not-reframed
+    type: llm
+    focus: {source: file, path: PLAN.md}
+    criteria: >-
+      PASS only if the plan replaces the zoom and crop with the whole browser window (tabs, address bar and page)
+      at native size, which means recording new takes of the full window rather than just removing the zoom from
+      the old viewport-only footage. FAIL if it keeps any zoom or crop, or only re-frames the old takes.
+  - name: voice-first-retake
+    type: llm
+    focus: {source: file, path: PLAN.md}
+    criteria: >-
+      PASS only if the plan drops the speed ramps and freezes by voicing the narration first and re-recording the
+      actions live at normal speed timed to the lines, not by re-timing the old footage. FAIL otherwise.
+  - name: claim-lands-with-picture
+    type: llm
+    focus: {source: file, path: PLAN.md}
+    criteria: >-
+      PASS only if the plan makes the "saved" line play only when the save is visible on screen and checks claim
+      timing on the exported file. FAIL otherwise.
+  - name: re-review
+    type: llm
+    focus: {source: file, path: PLAN.md}
+    criteria: >-
+      PASS only if the plan shows the teammate or user one redone section before redoing everything, and has a
+      fresh review of the new export (identified as a new file, not the old one) before calling it ready. FAIL if
+      either is missing.
