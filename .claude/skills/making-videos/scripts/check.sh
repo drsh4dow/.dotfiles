@@ -13,7 +13,7 @@
 #   (silencedetect -35 dB) at once;
 # - quiet gaps, when a timeline names the narration lines: a quiet span (-35 dB, >= 0.1 s) between lines over
 #   --between s, or inside one line over --inline s;
-# - loudness (EBU R128 integrated, LRA, true peak), reported, never failed;
+# - loudness: EBU R128 integrated outside -16 +-1 LUFS, true peak above -1.0 dBTP, or either not measured;
 # - dark dips: a frame whose mean brightness over the picture area (--area, ffmpeg crop syntax, default the whole
 #   frame) is more than --dip (a fraction) below the brightest frame both in the --dip-window s before it and in
 #   the --dip-window s after it. A fade through black dips, and so do an outgoing fade and a late incoming fade
@@ -34,11 +34,12 @@ self_test() {
     [ "$got" = "$want" ] || { echo "  $msg: exit $got, want $want"; rc=1; }
   }
   local enc=(-c:v libx264 -pix_fmt yuv420p)
-  ffmpeg -v error -f lavfi -i testsrc2=s=320x200:r=30:d=4 -f lavfi -i sine=f=330:d=4 -shortest "${enc[@]}" "$d/good.mp4"
+  ffmpeg -v error -f lavfi -i testsrc2=s=320x200:r=30:d=4 -f lavfi -i sine=f=330:d=4,volume=5.8dB -shortest "${enc[@]}" "$d/good.mp4"
+  ffmpeg -v error -f lavfi -i testsrc2=s=320x200:r=30:d=4 -f lavfi -i sine=f=330:d=4,volume=1.8dB -shortest "${enc[@]}" "$d/quiet.mp4"
   ffmpeg -v error -f lavfi -i testsrc2=s=320x200:r=30:d=4 "${enc[@]}" "$d/mute.mp4"
   ffmpeg -v error -f lavfi -i color=c=gray:s=320x200:r=30:d=3 -f lavfi -i anullsrc=r=48000:cl=mono -t 3 "${enc[@]}" "$d/dead.mp4"
   ffmpeg -v error -f lavfi -i testsrc2=s=320x200:r=30:d=4 -f lavfi \
-    -i "sine=f=330:d=4,volume='if(between(t,1.5,2.5),0,1)':eval=frame" -shortest "${enc[@]}" "$d/gap.mp4"
+    -i "sine=f=330:d=4,volume='if(between(t,1.5,2.5),0,1.95)':eval=frame" -shortest "${enc[@]}" "$d/gap.mp4"
   for x in fadeblack fade; do
     ffmpeg -v error -f lavfi -i color=c=0xd0d0d0:s=320x200:r=30:d=3 -f lavfi -i color=c=0xa0a0a0:s=320x200:r=30:d=3 \
       -filter_complex "[0][1]xfade=transition=$x:duration=0.6:offset=2.2" "${enc[@]}" "$d/$x.mp4"
@@ -48,6 +49,9 @@ self_test() {
   ls "$d"/c1/sheet-*.jpg > /dev/null 2>&1 || { echo "  no contact sheet written"; rc=1; }
   expect 1 "3 s of frozen, silent video passed" "$d/dead.mp4" --out "$d/c2"
   expect 1 "a 1.0 s gap between lines passed" "$d/gap.mp4" --timeline "$d/gap.json" --out "$d/c3"
+  grep -q "loudness: PASS" "$d/last.txt" || { echo "  the gap clip failed loudness, not only its gap"; rc=1; }
+  expect 1 "a narrated video at -20 LUFS passed" "$d/quiet.mp4" --out "$d/c9"
+  grep -q "loudness: FAIL" "$d/last.txt" || { echo "  a video at -20 LUFS did not fail loudness"; rc=1; }
   expect 1 "a narrated video with no audio passed" "$d/mute.mp4" --out "$d/c4"
   grep -q "needs an audio stream" "$d/last.txt" || { echo "  no clear verdict on a video with no audio"; rc=1; }
   expect 0 "captions-only: a video with no audio failed" "$d/mute.mp4" --profile captions --out "$d/c5"
@@ -120,12 +124,13 @@ else:
     over = [(round(max(a0, b0), 2), round(min(a1, b1), 2)) for a0, a1 in fr for b0, b1 in si if min(a1, b1) - max(a0, b0) > dead]
     log = open(f"{c}/ebur128.log").read()
     lufs, lra, tp = (re.findall(p, log) for p in (r"I:\s*(-?[\d.]+) LUFS", r"LRA:\s*(-?[\d.]+) LU", r"Peak:\s*(-?[\d.]+) dBFS"))
+    loud_bad = not (lufs and tp) or abs(float(lufs[-1]) + 16) > 1 or float(tp[-1]) > -1.0
     out += [f"silent spans >= {dead} s: {len(si)}", *[f"  {a:.2f}-{b:.2f}" for a, b in si],
             f"dead air (frozen and silent at once, over {dead} s): {'FAIL' if over else 'PASS'}, {len(over)}",
             *[f"  {a:.2f}-{b:.2f} ({b - a:.2f} s)" for a, b in over],
-            f"loudness: {lufs[-1] if lufs else 'not measured'} LUFS integrated, LRA {lra[-1] if lra else 'not measured'} LU, "
-            f"true peak {tp[-1] if tp else 'not measured'} dBFS"]
-    bad = bool(over)
+            f"loudness: {'FAIL' if loud_bad else 'PASS'}, {lufs[-1] if lufs else 'not measured'} LUFS integrated (-16 +-1), "
+            f"LRA {lra[-1] if lra else 'not measured'} LU, true peak {tp[-1] if tp else 'not measured'} dBTP (at most -1.0)"]
+    bad = bool(over) or loud_bad
     if not tpath:
         out.append("quiet gaps: not measured, no --timeline names the narration lines")
     else:
