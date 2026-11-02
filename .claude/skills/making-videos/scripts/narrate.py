@@ -6,7 +6,7 @@
 """Voice a script and lay every line on one clock: the narration step for capture cuts and composed films alike.
 
     narrate.py SCRIPT.json [--out DIR] [--cache DIR] [--voice gemini:Iapetus,eleven:Mark,captions] [--style S]
-               [--offline] [--fps 30] [--lead-in 0.45] [--gap 0.2] [--chapter-gap 0.4] [--tail 1.0]
+               [--offline] [--fps 30] [--lead-in 0.45] [--gap 0.25] [--chapter-gap 0.4] [--tail 1.0]
                [--caption-chars 70]
     narrate.py SCRIPT.json --voices gemini:Iapetus,gemini:Charon,eleven:Mark [--chapter ID]
     narrate.py --self-test
@@ -257,7 +257,7 @@ def self_test() -> int:
         a1, a2, b1 = v["lines"]
         if v["voice"] != "gemini:Good" or calls != ["Broken", "Broken", "Good", "Good", "Good"]:
             fails.append(f"a provider failure did not revoice every line with the next voice: {v['voice']}, {calls}")
-        if [a1["start"], round(a2["start"] - a1["end"], 3), round(b1["start"] - a2["end"], 3)] != [0.45, 0.2, 0.4] \
+        if [a1["start"], round(a2["start"] - a1["end"], 3), round(b1["start"] - a2["end"], 3)] != [0.45, 0.25, 0.4] \
                 or v["duration"] != round(b1["end"] + 1.0, 3):
             fails.append(f"gaps: lines {[(ln['start'], ln['end']) for ln in v['lines']]}, duration {v['duration']}")
         if v["chapters"] != [{"id": "intro", "start": a1["start"], "end": a2["end"]},
@@ -326,7 +326,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--style", default=tts.STYLE)
     p.add_argument("--offline", action="store_true")
     p.add_argument("--fps", type=int, default=30)
-    for flag, default in (("--lead-in", 0.45), ("--gap", 0.2), ("--chapter-gap", 0.4), ("--tail", 1.0)):
+    for flag, default in (("--lead-in", 0.45), ("--gap", 0.25), ("--chapter-gap", 0.4), ("--tail", 1.0)):
         p.add_argument(flag, type=float, default=default)
     p.add_argument("--caption-chars", type=int, default=70)
     a = p.parse_args(argv)
