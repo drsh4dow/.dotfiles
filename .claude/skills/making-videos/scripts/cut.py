@@ -22,24 +22,26 @@ EDIT.json (paths relative to it; every box is [x, y, w, h] in canvas pixels unle
      "font": null,                                            # default: the skill's fonts/Inter-Regular.ttf
      "voice": "voice/voice.json",                             # narrate.py's output; narration.wav beside it
      "shots": [{"take": "takes/t1.mp4",                       # events default: takes/t1.events.json
-                "pieces": [{"play": [0, 4]}, {"hold": 4, "for": 1.5}, {"play": [30, 34], "chip": "auto"}],
+                "pieces": [{"play": [0, 4]}, {"play": [30, 34], "chip": "auto"}],
                 "outlines": [{"src": [1, 3], "mark": "save", "key": "box", "color": [37, 99, 235]},
                              {"src": [5, 7], "box": [100, 200, 300, 40]}],   # take pixels
                 "rings": true}],
      "lines": [{"id": "c1-1", "at": 0.3}]}                    # null: every voice.json line at its own time
 
-A piece plays take seconds [s0, s1] at "speed" (default 1), or holds one take frame "for" seconds. Consecutive
+A piece plays take seconds [s0, s1] at 1.0x, and nothing else: no speed ramps, no freeze holds. Consecutive
 pieces that skip take time are a jump cut; "chip": "auto" on the later piece shows "N s later" in chip_box.
 A line names a voice.json line; its "at" is the output time its first word starts (default its voice.json
 time), and its captions and audio from voice.json and narration.wav move with it. Rings come from the take's
 logged clicks. Outlines come from a logged DOM box ("mark", "key") or a literal take-pixel box; they cover the
 take seconds "src".
 
-Rules the cutter enforces (exit 2): one scale for every take; every text box outside the page slot; captions
-fit caption_rows; narration lines don't overlap and end before the picture does.
+Rules the cutter enforces (exit 2): pieces only play; one scale for every take; every text box outside the page
+slot; captions fit caption_rows; narration lines don't overlap and end before the picture does.
 """
 from __future__ import annotations
 
+import contextlib
+import io
 import json
 import math
 import subprocess
@@ -91,44 +93,33 @@ class Take:
 def plan_pieces(shot: dict, t: float) -> tuple[list, list]:
     pieces, chips, prev_end = [], [], None
     for p in shot["pieces"]:
-        if "play" in p:
-            s0, s1 = map(float, p["play"])
-            sp = float(p.get("speed", 1.0))
-            dur = (s1 - s0) / sp
-            if dur <= 0:
-                raise EditError(f"piece {p} plays nothing")
-            if p.get("chip"):
-                text = p["chip"]
-                if text == "auto":
-                    if prev_end is None or s0 <= prev_end:
-                        raise EditError(f"chip 'auto' on {p} needs an earlier piece that ends before {s0}")
-                    text = f"{round(s0 - prev_end)} s later"
-                chips.append({"text": text, "t0": t, "t1": t + CHIP_FOR})
-            pieces.append([t, t + dur, "play", s0, s1, sp])
-            t, prev_end = t + dur, s1
-        else:
-            s = float(p["hold"])
-            pieces.append([t, t + float(p["for"]), "hold", s, None, 0])
-            t, prev_end = t + float(p["for"]), s
+        if "play" not in p or set(p) - {"play", "chip"}:
+            raise EditError(f"piece {p}: a piece only plays take seconds at 1.0x, as {{\"play\": [s0, s1]}} with an "
+                            "optional chip; speed ramps and freeze holds are gone, so jump-cut over a real wait instead")
+        s0, s1 = map(float, p["play"])
+        if s1 <= s0:
+            raise EditError(f"piece {p} plays nothing")
+        if p.get("chip"):
+            text = p["chip"]
+            if text == "auto":
+                if prev_end is None or s0 <= prev_end:
+                    raise EditError(f"chip 'auto' on {p} needs an earlier piece that ends before {s0}")
+                text = f"{round(s0 - prev_end)} s later"
+            chips.append({"text": text, "t0": t, "t1": t + CHIP_FOR})
+        pieces.append([t, t + s1 - s0, "play", s0, s1, 1.0])  # the timeline piece shape _media.Timeline reads
+        t, prev_end = t + s1 - s0, s1
     return pieces, chips
 
 
 def out_first(pieces, src) -> float | None:
-    for o0, o1, kind, s0, s1, sp in pieces:
-        if kind == "play" and s0 <= src <= s1:
-            return o0 + (src - s0) / sp
-        if kind == "hold" and abs(s0 - src) < 1e-6:
-            return o0
-    return None
+    return next((o0 + src - s0 for o0, _, _, s0, s1, _ in pieces if s0 <= src <= s1), None)
 
 
 def out_last(pieces, src) -> float | None:
     best = None
-    for o0, o1, kind, s0, s1, sp in pieces:
-        if kind == "hold" and s0 <= src + 1e-6:
-            best = o1
-        elif kind == "play" and s0 <= src + 1e-6:
-            best = o1 if src >= s1 else o0 + (src - s0) / sp
+    for o0, o1, _, s0, s1, _ in pieces:
+        if s0 <= src + 1e-6:
+            best = o1 if src >= s1 else o0 + src - s0
     return best
 
 
@@ -236,7 +227,7 @@ class Cut:
             if start < prev_end + 0.1:
                 raise EditError(f"line '{ln['id']}' starts at {start:.2f}, before the last one ends ({prev_end:.2f})")
             if end > self.total:
-                raise EditError(f"line '{ln['id']}' ends at {end:.2f}, after the picture ({self.total:.2f}); add a hold")
+                raise EditError(f"line '{ln['id']}' ends at {end:.2f}, after the picture ({self.total:.2f}); play more take time")
             lo = (vls[i - 1]["end"] + vl["start"]) / 2 if i else 0.0  # cut in the quiet, so a moved line never takes a neighbour's words
             hi = (vl["end"] + vls[i + 1]["start"]) / 2 if i + 1 < len(vls) else voice["duration"]
             self.lines.append({"text": vl["show"], "start": start, "end": end, "audio": (lo, hi, shift)})
@@ -448,14 +439,13 @@ def self_test() -> int:
         edit = {"out": "cut.mp4", "fps": 30, "canvas": [960, 600], "page": {"slot": [140, 10, 800, 500]},
                 "frame": {"color": [100, 116, 139], "width": 2}, "caption_box": [0, 516, 960, 84], "caption_size": 24,
                 "chip_box": [8, 20, 124, 36], "labels": [{"box": [8, 70, 124, 60], "text": "Synthetic", "t0": 0, "t1": 99}],
-                "shots": [{"take": "takes/t1.mp4", "pieces": [{"play": [0, 2]}, {"hold": 2, "for": 0.6},
-                                                               {"play": [4, 6], "chip": "auto"}],
+                "shots": [{"take": "takes/t1.mp4", "pieces": [{"play": [0, 2]}, {"play": [4, 6], "chip": "auto"}],
                            "outlines": [{"src": [0.4, 1.8], "mark": "row"}]},
                           {"take": "takes/t2.mp4", "pieces": [{"play": [0, 2]}]}],
                 "voice": "voice.json", "lines": [{"id": "a", "at": 0.2}, {"id": "b", "at": 3.2}]}
         (d / "script.json").write_text(json.dumps([
-            {"id": "a", "chapter": "one", "show": "A synthetic page. A row is outlined."},
-            {"id": "b", "chapter": "two", "show": "Two seconds later, a narrower take."}]))
+            {"id": "a", "chapter": "one", "show": "A synthetic page."},
+            {"id": "b", "chapter": "two", "show": "A narrower take."}]))
         subprocess.run([str(here / "narrate.py"), str(d / "script.json"), "--voice", "captions"], check=True,
                        capture_output=True)
         voice = json.loads((d / "voice.json").read_text())
@@ -480,7 +470,7 @@ def self_test() -> int:
         if [ch["text"] for ch in tl["chips"]] != ["2 s later"]:
             fails.append(f"chips {tl['chips']}")
         caps = tl["captions"]
-        if len(caps) != 3 or any(a["hide"] > b["show"] + 1e-9 for a, b in zip(caps, caps[1:])):
+        if len(caps) != 2 or any(a["hide"] > b["show"] + 1e-9 for a, b in zip(caps, caps[1:])):
             fails.append(f"captions overlap or miscount: {caps}")
         if not any(m["kind"] == "ring" for m in tl["marks"]) or not any(m["kind"] == "outline" for m in tl["marks"]):
             fails.append("missing ring or outline mark")
@@ -501,15 +491,21 @@ def self_test() -> int:
             fails.append(f"soft subtitles: streams {subs}, srt {srt[:80]!r}")
         if json.loads((d / "timeline.json").read_text())["scale"] != 1.0:
             fails.append("a full-canvas slot at scale 1.0 did not keep native pixels")
-        for bad, why in ((dict(edit, caption_box=[0, 400, 960, 200]), "a caption box over the page slot"),
-                         (dict(edit, lines=[{"id": "nope"}]), "a line voice.json does not have")):
+        ramp = [dict(edit["shots"][0], pieces=[{"play": [0, 2], "speed": 2}])]
+        freeze = [dict(edit["shots"][0], pieces=[{"play": [0, 2]}, {"hold": 2, "for": 1}])]
+        for bad, why, says in ((dict(edit, caption_box=[0, 400, 960, 200]), "a caption box over the page slot", "slot"),
+                               (dict(edit, lines=[{"id": "nope"}]), "a line voice.json does not have", "nope"),
+                               (dict(edit, shots=ramp), "a sped-up piece", "1.0x"),
+                               (dict(edit, shots=freeze), "a freeze hold", "1.0x")):
             ep.write_text(json.dumps(bad))
+            err = io.StringIO()
             try:
-                Cut(ep)
+                with contextlib.redirect_stderr(err):
+                    Cut(ep)
                 fails.append(f"{why} was accepted")
             except SystemExit as e:
-                if e.code != 2:
-                    fails.append(f"{why}: exit {e.code}, want 2")
+                if e.code != 2 or says not in err.getvalue():
+                    fails.append(f"{why}: exit {e.code} saying {err.getvalue()!r}, want 2 saying {says!r}")
     print("cut.py self-test: " + ("PASS" if not fails else "FAIL\n  " + "\n  ".join(fails)))
     return 0 if not fails else 1
 
