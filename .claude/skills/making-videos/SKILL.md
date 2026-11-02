@@ -35,7 +35,7 @@ Copy these into your todo list. Each ends on its done-when.
    | An Android or iOS app | [references/capture-mobile.md](references/capture-mobile.md) |
    | Motion graphics, a promo, an explainer, a terminal tutorial | [references/compose.md](references/compose.md) |
 
-   Done when you have looked at full-size frames of every take or scene yourself.
+   Done when you have looked at full-size frames of every take or scene yourself, and each click or tap ring lands on the frame where the action happens, measured on the video's clock.
 5. **One chapter first.** Cut one chapter in its final framing, give the user its path, open it, and wait for a yes. If the user told you to run without stopping, log that you skipped the wait and show the chapter at handoff. Done on the user's yes or the logged skip.
 6. **Cut and mix.** Per [references/cut-and-mix.md](references/cut-and-mix.md). Done when the export exists and you know its sha256.
 7. **Check the export.** Run every check in [references/checks.md](references/checks.md) that applies to this video's profile. Done when each passes on the exported file.

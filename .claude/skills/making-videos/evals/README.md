@@ -8,7 +8,7 @@ Run from the skill folder, with and without the skill:
 claude plugin eval . --scaffold --trust-plugin --no-publish --allow-tools Bash Write --judge-model opus -j 4 --json results/run.json
 ```
 
-`--no-publish` keeps reports off claude.ai. Add `--case <name>` for one case. Results land in `results/`, which git ignores.
+`--no-publish` keeps reports off claude.ai. Add `--case <glob>` for some cases; it takes one glob, and a second `--case` replaces the first. Results land in `results/`, which git ignores.
 
 ## What tests generalization
 
