@@ -9,7 +9,7 @@
 # which is dead air; quiet-gaps.txt, when a timeline names the narration lines, quiet spans (-35 dB, >= 0.1 s)
 # between lines (bar --between) and inside one line (bar --inline); loudness (EBU R128 integrated, LRA, true
 # peak); and contact sheets of frames picked by index every --sheet-every seconds (frames.py).
-# Exit 1 on dead air or a quiet span over its bar, 0 otherwise.
+# Exit 1 on dead air, a quiet span over its bar, or a video with no audio stream, 0 otherwise.
 set -euo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
 
@@ -18,6 +18,7 @@ self_test() {
   d="$(mktemp -d)"
   trap 'rm -rf "$d"' RETURN
   ffmpeg -v error -f lavfi -i testsrc2=s=320x200:r=30:d=4 -f lavfi -i sine=f=330:d=4 -shortest -c:v libx264 -pix_fmt yuv420p "$d/good.mp4"
+  ffmpeg -v error -f lavfi -i testsrc2=s=320x200:r=30:d=4 -c:v libx264 -pix_fmt yuv420p "$d/mute.mp4"
   ffmpeg -v error -f lavfi -i color=c=gray:s=320x200:r=30:d=3 -f lavfi -i anullsrc=r=48000:cl=mono -t 3 -c:v libx264 -pix_fmt yuv420p "$d/dead.mp4"
   ffmpeg -v error -f lavfi -i testsrc2=s=320x200:r=30:d=4 -f lavfi \
     -i "sine=f=330:d=4,volume='if(between(t,1.5,2.5),0,1)':eval=frame" -shortest -c:v libx264 -pix_fmt yuv420p "$d/gap.mp4"
@@ -25,13 +26,16 @@ self_test() {
   "$0" "$d/good.mp4" --out "$d/c1" > /dev/null || { echo "  moving picture with steady sound failed"; rc=1; }
   if "$0" "$d/dead.mp4" --out "$d/c2" > /dev/null; then echo "  3 s of frozen, silent video passed"; rc=1; fi
   if "$0" "$d/gap.mp4" --timeline "$d/gap.json" --out "$d/c3" > /dev/null; then echo "  a 1.0 s gap between lines passed"; rc=1; fi
+  local got=0
+  "$0" "$d/mute.mp4" --out "$d/c4" > "$d/mute.txt" 2>&1 || got=$?
+  [ "$got" = 1 ] && grep -q "needs an audio stream" "$d/mute.txt" || { echo "  no clear verdict on a video with no audio (exit $got)"; rc=1; }
   ls "$d"/c1/sheet-*.jpg > /dev/null 2>&1 || { echo "  no contact sheet written"; rc=1; }
   [ "$rc" = 0 ] && echo "check.sh self-test: PASS" || echo "check.sh self-test: FAIL"
   return "$rc"
 }
 
 case "${1:-}" in
-  ""|-h|--help) sed -n '2,14p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+  ""|-h|--help) sed -n '2,12p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
   --self-test) self_test; exit $? ;;
 esac
 
@@ -52,15 +56,24 @@ C="${OUT:-$(dirname "$V")/checks}"
 mkdir -p "$C"
 ffprobe -v error -show_entries format=duration,size,bit_rate:stream=codec_name,width,height,r_frame_rate,sample_rate,channels -of json "$V" > "$C/ffprobe.json"
 ffmpeg -hide_banner -nostats -i "$V" -vf "freezedetect=n=-50dB:d=$DEAD" -map 0:v -f null - 2> "$C/freezedetect.log"
-ffmpeg -hide_banner -nostats -i "$V" -af "silencedetect=noise=-35dB:d=$DEAD" -map 0:a -f null - 2> "$C/silencedetect.log"
-ffmpeg -hide_banner -nostats -i "$V" -af "silencedetect=noise=-35dB:d=0.1" -map 0:a -f null - 2> "$C/silencedetect-0.1s.log"
-ffmpeg -hide_banner -nostats -i "$V" -af "ebur128=peak=true" -map 0:a -f null - 2> "$C/ebur128.log" || true
+rm -f "$C"/silencedetect*.log "$C"/ebur128.log
+if grep -q '"channels"' "$C/ffprobe.json"; then
+  ffmpeg -hide_banner -nostats -i "$V" -af "silencedetect=noise=-35dB:d=$DEAD" -map 0:a -f null - 2> "$C/silencedetect.log"
+  ffmpeg -hide_banner -nostats -i "$V" -af "silencedetect=noise=-35dB:d=0.1" -map 0:a -f null - 2> "$C/silencedetect-0.1s.log"
+  ffmpeg -hide_banner -nostats -i "$V" -af "ebur128=peak=true" -map 0:a -f null - 2> "$C/ebur128.log" || true
+fi
 
 set +e
 python3 - "$C" "$DEAD" "$BETWEEN" "$INLINE" "${T:-}" <<'EOF'
-import json, re, sys
+import json, os, re, sys
 c, dead, between, inline, tpath = sys.argv[1], *map(float, sys.argv[2:5]), sys.argv[5]
 dur = float(json.load(open(f"{c}/ffprobe.json"))["format"]["duration"])
+if not os.path.exists(f"{c}/silencedetect.log"):
+    msg = ("audio: FAIL, a narrated video needs an audio stream and this one has none; "
+           "dead air, quiet gaps and loudness not measured")
+    open(f"{c}/freeze-silence.txt", "w").write(msg + "\n")
+    print(msg)
+    sys.exit(1)
 def spans(path, a, b):
     txt = open(path).read()
     s = [float(x) for x in re.findall(a + r":\s*([\d.]+)", txt)]
