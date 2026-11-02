@@ -62,8 +62,8 @@ CHIP_FOR = 1.2
 
 class EditError(SystemExit):
     def __init__(self, msg: str):
-        super().__init__(f"cut.py: {msg}")
-        self.code = 2
+        print(f"cut.py: {msg}", file=sys.stderr)  # SystemExit prints nothing once its code is the number 2
+        super().__init__(2)
 
 
 def inter(a, b) -> bool:
