@@ -2,10 +2,10 @@
 
 Each case gives an agent a fixture project and an organic request, and grades the `PLAN.md` it writes before any work. The graders hold the user's rules, so a case fails when a plan would have drawn one of the user's past complaints.
 
-Run from the skill folder, with and without the skill:
+Run from the skill folder. One run scores the skill against a no-skill baseline:
 
 ```bash
-claude plugin eval . --scaffold --trust-plugin --no-publish --allow-tools Bash Write --judge-model opus -j 4 --json results/run.json
+claude plugin eval . --scaffold --trust-plugin --no-publish --allow-tools Bash Write --judge-model opus -j 4 --json evals/results/run.json
 ```
 
 `--no-publish` keeps reports off claude.ai. Add `--case <glob>` for some cases; it takes one glob, and a second `--case` replaces the first. Results land in `results/`, which git ignores.

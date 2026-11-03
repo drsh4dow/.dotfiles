@@ -1,8 +1,8 @@
 # Remotion film starter
 
-Copy this folder, put the voice script's `voice.json` and `voice.wav` in `public/`, and replace `src/chapters/Example.tsx` with one component per chapter. Mount each in `src/Root.tsx` inside a `SceneWindow`. Cue motion on spoken words with `at(lineId, word)` from `src/cues.ts`, which lands 4 frames before the word, and pick colours from the named slots in `src/theme.ts`.
+Copy this folder, copy `narrate.py`'s `voice.json` to `public/voice.json` and its `narration.wav` to `public/voice.wav`, and replace `src/chapters/Example.tsx` with one component per chapter. Mount each in `src/Root.tsx` inside a `SceneWindow` whose `id` is its chapter id in `voice.json`. Cue motion on spoken words with `at(lineId, word)` from `src/cues.ts`, which lands 4 frames before the word, and pick colours from the named slots in `src/theme.ts`.
 
-Remotion's license is free only for individuals and companies of up to 3 people; larger companies need a paid license.
+Remotion is free only for individuals and companies of up to 3 people. For a larger company, tell the user it needs a paid license before you build on it.
 
 ```bash
 bun install                                                          # copy node_modules/.remotion/chrome-headless-shell from another Remotion project if Chrome's download is slow
@@ -11,7 +11,7 @@ npx remotion render Film out/check.mp4 --frames=120-240 --scale=0.5  # motion ch
 npx remotion bundle src/index.ts --out-dir=out/bundle                # bundle once, then any number of stills
 npx remotion still out/bundle Film out/f140.png --frame=140
 npx remotion render Film out/film.mp4                                # full 1080p picture; the config keeps renders muted
-../../scripts/mix.sh out/film.mp4 public/voice.wav out/final.mp4   # voice plus optional --music bed
+<skill dir>/scripts/mix.sh out/film.mp4 public/voice.wav out/final.mp4   # voice plus optional --music bed
 ```
 
 - The range flag is `--frames=A-B`. `--frame-range` is ignored and renders the whole film.

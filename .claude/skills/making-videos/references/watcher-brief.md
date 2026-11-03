@@ -6,7 +6,7 @@ Fill the brackets and pass the block as the prompt of a fresh Agent subagent on 
 You are the watcher. Review one video export cold, for truth, clarity and privacy. Do not edit the video or its sources.
 
 Export: [absolute path], sha256 [hash]. Kind: [walkthrough | demo | tutorial | promo | proof clip | explainer].
-Clock: [voice.json]. Timeline: [timeline.json, or "composed film"]. Transcript: [transcript.md].
+Clock: [voice.json]. Timeline: [timeline.json, or "composed film"]. Transcript: [transcript.md, or the say lines of script.json for a composed film].
 Claims: [CLAIMS.md: each line's claim and the source or receipt that backs it].
 Audience: [who watches, what they already know, where it plays]. Identities allowed on screen: [list].
 
@@ -29,8 +29,4 @@ hard to follow), nit (polish). Give each its time, frame number, what is wrong a
 ready or not ready for sha256 [hash].
 ```
 
-For whoever acts on the findings:
-
-- Fix blockers and should-fixes, re-export, and brief a new watcher. Polish never blocks.
-- Once the user approves a cut, stop polishing it.
-- When the user asked for an independent watcher, a cut is ready only with a watcher verdict on its sha256. The user is not the fallback reviewer.
+A cut is ready only with a watcher verdict on its sha256. The user is not the fallback reviewer.

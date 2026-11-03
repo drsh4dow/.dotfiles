@@ -10,11 +10,12 @@ A full-window web cut is the window itself, with nothing around it:
 {"out": "cut.mp4", "fps": 30, "canvas": [1920, 1080],
  "page": {"slot": [0, 0, 1920, 1080], "scale": 1},
  "caption_box": null, "subtitles": true, "chip_box": null, "voice": "voice/voice.json",
- "shots": [{"take": "takes/today.mp4", "pieces": [{"play": [0, 14.2]}, {"play": [52.8, 61], "chip": "auto"}], "rings": true}]}
+ "shots": [{"take": "takes/today.mp4", "pieces": [{"play": [0, 14.2]}, {"play": [52.8, 61]}], "rings": true}]}
 ```
 
-- With no `lines`, every line plays at its own `voice.json` time. Trim each take so its first action lands on the word that names it.
-- Each take plays at 1.0× from start to end. Its pieces skip only backend waits. Two pieces that skip time make a jump cut; say the measured wait in the line or show it as a chip.
+- With no `lines`, every line plays at its own `voice.json` time, so a take timed as `capture-web.md` says lines up with no further work.
+- Each take plays at 1.0× from start to end. Its pieces skip only backend waits. Two pieces that skip time make a jump cut; say the measured wait in the voice ("about 40 s later"). A "N s later" chip needs a `chip_box` outside the picture, so a full-window cut has none.
+- To cut one chapter for the user's look, list only that chapter's lines in `lines`, each with `"at"` its `voice.json` time minus the chapter's start.
 - For a phone, put its whole screen in a slot at one scale for the whole video, and put words in the space beside it.
 - A cutter of your own works too when it writes the same `timeline.json` (contract in `scripts/_media.py`), so every check still runs.
 
@@ -26,14 +27,10 @@ Prose rules leaked one word per round ("brief cards over empty areas", a blurred
 
 ## Captions
 
-- Burn them in when the video plays in a meeting room or on a platform without subtitle support. Draw them in a band that is not part of the picture.
-- For a full-window capture, use a soft subtitle track (`"subtitles": true`), so the window stays at 1:1. When a check needs burned captions, add a band below the window; the window keeps its size.
-- One sentence per caption, timed to its words from `voice.json`.
+- A full-window capture uses a soft subtitle track (`"subtitles": true`), so the window stays at 1:1. When it must play where subtitles don't show, use a 1920x1230 canvas with the window at `[0, 0, 1920, 1080]` and `caption_box` `[0, 1080, 1920, 150]`, and tell the user the frame is taller than 1080p.
+- Burn captions in a band outside the picture for a composed film or a phone cut that plays in a meeting room.
+- Captions come from `voice.json`: each line split at its clauses, each timed to its first spoken word.
 
 ## Mix
 
-`scripts/mix.sh` lays the voice over an optional music bed:
-
-- Voice at -16 LUFS integrated, true peak at or under -1.5 dBTP.
-- Music about 16 dB under the voice, ducked with a 120 ms look-ahead sidechain.
-- Start the bed so its own ending lands on the end card, and fade it out with the picture.
+`scripts/mix.sh VIDEO VOICE.wav OUT [--music BED --music-in S]` sets the voice to -16 LUFS and ducks an optional music bed about 16 dB under it. A recorded cut already carries its voice from `cut.py`, so run `mix.sh` on it only to add music, and give it the cut's own voice track (`ffmpeg -i cut.mp4 -vn -c:a pcm_s16le cut-voice.wav`): `narration.wav` no longer matches once a line has an `"at"`. A composed film always goes through `mix.sh` with `narration.wav`. Set `--music-in` so the bed's own ending lands on the end card.

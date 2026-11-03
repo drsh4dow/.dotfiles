@@ -4,7 +4,7 @@ Measure the file the viewer will watch, never the edit plan. Captions once "pass
 
 ## Scripts
 
-Pass `--profile captions` for a captions-only video with no voice. The default is `narrated`. Each script's `--help` gives its limits.
+Pass `--profile captions` to `check.sh` and `sync.py` for a captions-only video with no voice. The default is `narrated`. Each script's `--help` gives its limits.
 
 | Check | Script | Fails on |
 | --- | --- | --- |
@@ -14,7 +14,11 @@ Pass `--profile captions` for a captions-only video with no voice. The default i
 | Overlay allowlist | `overlays.py T` | anything over the picture but rings and outlines; a self-test the detector misses |
 | What changed between two exports | `framediff.py OLD NEW --allow T0-T1` | a changed frame outside the spans you meant to change, by the worst 8x8 patch, so a small email still shows |
 
-`timeline.json` names the cut before `mix.sh`, so pass `--video FINAL.mp4` to `framing.py`, `overlays.py` and `sync.py` to measure the mixed export. `framing.py` and `overlays.py` apply to recorded takes. A composed film has no `timeline.json` from `cut.py`; run `check.sh` and `sync.py` on it with a timeline built from `voice.json` and the caption box.
+`timeline.json` names the cut before `mix.sh`, so pass `--video FINAL.mp4` to `framing.py`, `overlays.py` and `sync.py` to measure the mixed export. `framing.py` and `overlays.py` apply to recorded takes. A composed film has no `timeline.json`: pass `--timeline public/voice.json` to `check.sh`, and build one for `sync.py` from the same file, with the caption band as the box:
+
+```bash
+jq '{video: "out/final.mp4", fps, caption_box: [0, 930, 1920, 150], captions: [.lines[].captions[] | {text, show: .start, hide: .end}]}' public/voice.json > timeline.json
+```
 
 ## By eye
 

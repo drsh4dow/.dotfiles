@@ -5,9 +5,9 @@ The picture is the whole browser window, tabs and address bar included, filling 
 ## Setup
 
 - `scripts/window.py` runs Xvfb and a headed Chromium on its own profile, records with ffmpeg x11grab, and drives with xdotool. It never captures the user's desktop and never uses their daily browser.
-- A full window at 1:1 reads on a laptop or a meeting-room screen, not on a phone. When the brief says phone, tell the user before recording. `window.py` pins the page zoom to 100%, because its logged boxes assume it.
+- A full window at 1:1 reads on a laptop or a meeting-room screen, not on a phone. When the video will be watched on a phone, tell the user before recording. `window.py` pins the page zoom to 100%, because its logged boxes assume it.
 - Sign the window in by copying the site's cookies from a signed-in agent browser (the **agent-browser** skill) over CDP.
-- Prove a new setup with a 5 s test clip, and look at one frame: tabs, address bar and pointer are all there.
+- Prove a new setup with `window.py shot --display :99 --out check.png` and look at it: tabs, address bar and pointer are all there.
 - Run `window.py --self-test` on a quiet machine. It proves the events clock matches the frames within 0.1 s. x264's lookahead once put every event 1.1 s ahead of its picture, so the recorder runs with `-tune zerolatency`.
 
 ## Privacy
@@ -18,8 +18,8 @@ The picture is the whole browser window, tabs and address bar included, filling 
 
 ## Takes
 
-- One take per chapter: one mp4 plus an `events.json` on the same clock. Read the line times from `voice.json` and fire each action at its line's start plus the offset of the word that names it.
-- `scripts/drive.py` gives the `Take` driver: eased pointer moves, per-character typing, real wheel scrolls at the pointer, DOM-box `mark`s for outlines, and a logged `wait_until` the cut can jump over. Use `with take:` so a failing step still stops the recorder. A crash once left the recorder running and the mp4 had no index.
+- Drive each take with `WindowTake` from `scripts/window.py` (its `--help` shows the import). It records the whole X display and has `drive.py`'s `Take` methods: eased pointer moves, per-character typing, wheel scrolls at the pointer, DOM-box `mark`s for outlines, and a logged `wait_until` the cut can jump over. `drive.Take` alone records the page only. Use `with take:` so a failing step still stops the recorder. A crash once left the recorder running and the mp4 had no index.
+- One take per chapter: one mp4 plus an `events.json` on the same clock, which starts at the take's first frame. Wait a lead of L seconds, then fire each action at L plus its word's `voice.json` time minus the chapter's start. In `EDIT.json` the shot starts with `{"play": [L, ...]}`.
 - Log each take's starting state, the writes it made and the receipts it owns (`take.state`, `take.wrote`). Prefer read-only footage to reseeding fixtures for the video. Keep deploys and flag flips out of the recording window: one rolled the API mid-take.
 - When a cut reuses older footage, say so in the video ("Recorded earlier"). A replayed take once made a saved edit look lost.
 - Proof shows real state. When a step is stubbed, the voice or a caption says so.

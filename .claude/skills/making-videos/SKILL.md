@@ -26,7 +26,7 @@ Copy these into your todo list. Each ends on its done-when.
 
 1. **Brief.** Write `BRIEF.md` in `~/Videos/<project>/src/`: the audience and what they know, where it plays, the one sentence they leave with, length, kind, truth sources, the identities allowed on screen, and the voice. Done when you have checked it against each rule above and nothing in it contradicts one.
 2. **Script.** Write `script.json` and `CLAIMS.md` per [references/story.md](references/story.md). Done when every line has its source in `CLAIMS.md`.
-3. **Voice.** `scripts/narrate.py script.json` writes `narration.wav` and `voice.json`, the clock every later block reads. Render a chapter in two or three voices with `--voices` for the user to hear. The default is Gemini's Iapetus, then ElevenLabs' Mark, then captions only; say which one ran. When `narrate.py` prints more than 175 words a minute, slow the voice at the provider (`eleven:Mark@0.8`, or Gemini's `--style`), never by stretching its audio. Done when the user has picked the voice by ear (or you logged the default because the user said to run without stopping), and `voice.json` in that voice passes its gap report. Every take and scene is timed to this file, so a later voice change means new takes.
+3. **Voice.** `scripts/narrate.py script.json` writes `narration.wav` and `voice.json`, the clock every later block reads. Render a chapter in two or three voices with `--voices` for the user to hear. The default is Gemini's Iapetus, then ElevenLabs' Mark, then captions only; say which one ran. When `narrate.py` prints more than 175 words a minute while speaking, slow the voice at the provider (`eleven:Mark@0.8`, or Gemini's `--style`), never by stretching its audio. Done when the user has picked the voice by ear (or you logged the default because the user said to run without stopping), and `narrate.py` reports a longest quiet gap of 0.5 s or less in that voice. A captions-only video runs `--voice captions` and has no voice to pick. Every take and scene is timed to this file, so a later voice change means new takes.
 4. **Picture.** Read the reference for where the picture comes from:
 
    | Picture | Read |
@@ -35,7 +35,7 @@ Copy these into your todo list. Each ends on its done-when.
    | An Android or iOS app | [references/capture-mobile.md](references/capture-mobile.md) |
    | Motion graphics, a promo, an explainer, a terminal tutorial | [references/compose.md](references/compose.md) |
 
-   Done when you have looked at full-size frames of every take or scene yourself, and each click or tap ring lands on the frame where the action happens, measured on the video's clock.
+   Done when you have looked at full-size frames of every take or scene yourself, and each logged click or tap lands on the frame where the UI reacts, measured on the take's clock.
 5. **One chapter first.** Cut one chapter in its final framing, give the user its path, open it, and wait for a yes. If the user told you to run without stopping, log that you skipped the wait and show the chapter at handoff. Done on the user's yes or the logged skip.
 6. **Cut and mix.** Per [references/cut-and-mix.md](references/cut-and-mix.md). Done when the export exists and you know its sha256.
 7. **Check the export.** Run every check in [references/checks.md](references/checks.md) that applies to this video's profile. Done when each passes on the exported file.
@@ -58,7 +58,7 @@ Copy these into your todo list. Each ends on its done-when.
 
 ## Scripts
 
-All in `scripts/`. Each prints `--help`, takes parameters, and has a self-test; `scripts/self-test` runs them all. Run each as an executable so its `uv run --script` shebang installs what it declares. They need ffmpeg, uv, Node 22+ and Chromium.
+All in `scripts/`. Each prints `--help`, takes parameters, and has a self-test; `scripts/self-test` runs them all. Run each as an executable so its `uv run --script` shebang installs what it declares. They need ffmpeg, uv, jq, Node 22+ and Chromium; web capture also needs Xvfb, xdotool and agent-browser.
 
 | Script | Block |
 | --- | --- |
