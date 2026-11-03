@@ -5,7 +5,7 @@ The picture is the whole browser window, tabs and address bar included, filling 
 ## Setup
 
 - `scripts/window.py` runs Xvfb and a headed Chromium on its own profile, records with ffmpeg x11grab, and drives with xdotool. It never captures the user's desktop and never uses their daily browser.
-- A full window at 1:1 reads on a laptop or a meeting-room screen, not a phone: 16 px page text is about 6 px on a phone. When the brief says phone, tell the user before recording. `window.py` pins the page zoom to 100%, because its logged boxes assume it.
+- A full window at 1:1 reads on a laptop or a meeting-room screen, not on a phone. When the brief says phone, tell the user before recording. `window.py` pins the page zoom to 100%, because its logged boxes assume it.
 - Sign the window in by copying the site's cookies from a signed-in agent browser (the **agent-browser** skill) over CDP.
 - Prove a new setup with a 5 s test clip, and look at one frame: tabs, address bar and pointer are all there.
 - Run `window.py --self-test` on a quiet machine. It proves the events clock matches the frames within 0.1 s. x264's lookahead once put every event 1.1 s ahead of its picture, so the recorder runs with `-tune zerolatency`.
