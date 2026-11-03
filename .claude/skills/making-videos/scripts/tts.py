@@ -5,28 +5,31 @@
 # ///
 """Voice narration one line at a time with Gemini or ElevenLabs, with word times, cached per line on disk.
 
-    tts.py --cache DIR [--voice gemini:Iapetus] [--style S] [--offline] "First line." "Second line."
     tts.py --self-test
 
-A voice is PROVIDER:VOICE[:MODEL]. gemini:Iapetus is Gemini's prebuilt voice Iapetus on gemini-3.8-flash-tts;
-eleven:Mark is ElevenLabs voice UgBBYS2sOqTuMpoF3BR0 on eleven_v4. Any other Gemini voice name or ElevenLabs
-voice id works too. --style is Gemini's speaking-style prompt (default STYLE below). ElevenLabs takes no prompt;
-its pace is a speed after the voice, eleven:Mark@0.8 (0.7 to 1.2, default ELEVEN_SPEED, which puts Mark near
-165 words a minute). Slow a voice this way, never by stretching its audio.
+narrate.py is the command; it imports synth and parse from here. A voice is PROVIDER:VOICE[:MODEL].
+gemini:Iapetus is Gemini's prebuilt voice Iapetus on gemini-3.8-flash-tts; eleven:Mark is ElevenLabs voice
+UgBBYS2sOqTuMpoF3BR0 on eleven_v4. Any other Gemini voice name or ElevenLabs voice id works too. Gemini takes a
+speaking-style prompt (default STYLE below). ElevenLabs takes no prompt; its pace is a speed after the voice,
+eleven:Mark@0.8 (0.7 to 1.2, default ELEVEN_SPEED, which puts Mark near 165 words a minute). Slow a voice this way,
+never by stretching its audio.
 ElevenLabs returns character times. Gemini returns none, so local faster-whisper (WHISPER_MODEL, default
 small.en) hears the clip and its words are matched to the line by letters; a clip that does not say the line is
-voiced again, up to 3 times. Either way each word's start and end then snap to the audible audio (10 ms frames
+voiced again, up to 3 tries in all. Either way each word's start and end then snap to the audible audio (10 ms frames
 above -35 dBFS), never spread by character count.
-Each line is cached under DIR as <sha256(text, provider, model, voice, style)[:20]>.{wav,json}, so a rerun calls
-the API only for lines whose text or voice changed. --offline turns a cache miss into an error, so a rebuild can
-never re-voice by accident. GEMINI_API_KEY and ELEVENLABS_API_KEY travel only in request headers and are never
-printed or written. A 4xx other than 429 fails the provider at once. A 429 waits its Retry-After and tries
-again, but a Retry-After over 300 s (a spent daily quota) fails the provider too.
+Each line is cached under DIR as <sha256(text, provider, model, voice, style, speed)[:20]>.{wav,json}, so a rerun
+calls the API only for lines whose text or voice changed. offline=True turns a cache miss into an error, so a
+rebuild can never re-voice by accident. GEMINI_API_KEY and ELEVENLABS_API_KEY travel only in request headers, are
+never printed or written, and never follow a redirect. A 3xx or a 4xx other than 429 fails the provider at once. A
+429 waits its Retry-After and tries again, but a Retry-After over 300 s (a spent daily quota) fails the provider
+too. A network error or a cut-off response is tried again, up to 6 requests in all; a response that is not JSON
+fails the provider at once.
 Send only narration you would publish: this text leaves the machine.
 
-As a module: synth(text, cache_dir, parse("gemini:Iapetus"), offline=False) -> {wav, duration,
-words: [{w, start, end}], voiced_start, voiced_end}, times in seconds from the clip start, one word per word of
-text. A provider that cannot voice lines raises ProviderError, so the caller can redo every line with the next voice.
+synth(text, cache_dir, parse("gemini:Iapetus"), offline=False) -> {wav, duration, words: [{w, start, end}],
+voiced_start, voiced_end}, times in seconds from the clip start, one word per word of text. A provider that cannot
+voice lines, or answers without audio or word times, raises ProviderError, so the caller can redo every line with
+the next voice.
 """
 from __future__ import annotations
 
@@ -34,6 +37,7 @@ import argparse
 import base64
 import difflib
 import hashlib
+import http.client
 import json
 import os
 import subprocess
@@ -51,9 +55,9 @@ import numpy as np
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import _media  # noqa: E402
 
-SR, HOP, LOUD_DB, MAX_WAIT, MIN_HEARD = 48000, 0.01, -35.0, 300, 0.7
+SR, HOP, LOUD_DB, MAX_WAIT, MIN_HEARD, BACKOFF = 48000, 0.01, -35.0, 300, 0.7, 2.0
 MODELS = {"gemini": "gemini-3.8-flash-tts", "eleven": "eleven_v4"}
-ELEVEN_SPEED = "0.85"
+ELEVEN_SPEED = 0.85
 ELEVEN_NAMES = {"Mark": "UgBBYS2sOqTuMpoF3BR0"}
 STYLE = "a calm, plain-spoken colleague narrating an internal product walkthrough, steady pace"
 API = {"gemini": ("https://generativelanguage.googleapis.com", "GEMINI_API_KEY", "x-goog-api-key"),
@@ -71,17 +75,34 @@ class Voice(NamedTuple):
     model: str
     voice: str
     style: str
+    speed: float | None
 
 
 def parse(spec: str, style: str = STYLE) -> Voice:
     provider, _, rest = spec.partition(":")
     voice, _, model = rest.partition(":")
+    voice, at, speed = voice.partition("@")
     if provider not in MODELS or not voice:
         raise SystemExit(f"tts.py: voice {spec!r} is not PROVIDER:VOICE[:MODEL] with PROVIDER gemini or eleven")
-    if provider == "eleven":
-        voice, _, speed = voice.partition("@")
-        return Voice(provider, model or MODELS[provider], ELEVEN_NAMES.get(voice, voice), speed or ELEVEN_SPEED)
-    return Voice(provider, model or MODELS[provider], voice, style)
+    if provider == "gemini":
+        if at:
+            raise SystemExit(f"tts.py: {spec!r}: Gemini takes no speed; slow it with --style")
+        return Voice(provider, model or MODELS[provider], voice, style, None)
+    try:
+        speed = float(speed) if at else ELEVEN_SPEED
+    except ValueError:
+        speed = None
+    if speed is None or not 0.7 <= speed <= 1.2:
+        raise SystemExit(f"tts.py: {spec!r}: an ElevenLabs speed is a number from 0.7 to 1.2")
+    return Voice(provider, model or MODELS[provider], ELEVEN_NAMES.get(voice, voice), "", speed)
+
+
+class _NoRedirect(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, *args):  # a redirect would carry the key header to another URL
+        return None
+
+
+_open = urllib.request.build_opener(_NoRedirect).open
 
 
 def _post(provider: str, path: str, body: dict) -> dict:
@@ -96,16 +117,19 @@ def _post(provider: str, path: str, body: dict) -> dict:
         req = urllib.request.Request(url, data=json.dumps(body).encode(), method="POST",
                                      headers={header: key, "content-type": "application/json"})
         try:
-            with urllib.request.urlopen(req, timeout=120) as r:
+            with _open(req, timeout=120) as r:
                 return json.load(r)
         except urllib.error.HTTPError as e:
             last = f"HTTP {e.code} {e.read()[:300].decode('utf-8', 'replace')}".replace(key, "<key>")
             ra = e.headers.get("Retry-After", "")
-            wait = float(ra) if e.code == 429 and ra.replace(".", "", 1).isdigit() else 2.0 * (attempt + 1)
-            if (400 <= e.code < 500 and e.code != 429) or wait > MAX_WAIT:
+            wait = float(ra) if e.code == 429 and ra.replace(".", "", 1).isdigit() else BACKOFF * (attempt + 1)
+            if (e.code < 500 and e.code != 429) or wait > MAX_WAIT:
                 break
-        except OSError as e:  # network errors carry no secret; report only the type
-            last, wait = type(e).__name__, 2.0 * (attempt + 1)
+        except ValueError:  # a whole answer that is not JSON; asking again would pay for the same page
+            last = "a response that is not JSON"
+            break
+        except (OSError, http.client.HTTPException) as e:
+            last, wait = type(e).__name__, BACKOFF * (attempt + 1)
     raise ProviderError(f"{provider} {last}")
 
 
@@ -126,7 +150,7 @@ def _gemini(text: str, v: Voice) -> tuple[bytes, list[str]]:
 
 def _eleven(text: str, v: Voice) -> tuple[bytes, list[tuple]]:
     d = _post("eleven", f"/v1/text-to-speech/{v.voice}/with-timestamps?output_format=pcm_24000",
-              {"text": text, "model_id": v.model, "voice_settings": {"speed": float(v.style)}})
+              {"text": text, "model_id": v.model, "voice_settings": {"speed": v.speed}})
     al = d.get("alignment") or {}
     words, cur = [], None
     for c, s, e in zip(al.get("characters") or [], al.get("character_start_times_seconds") or [],
@@ -138,6 +162,8 @@ def _eleven(text: str, v: Voice) -> tuple[bytes, list[tuple]]:
             words.append(cur)
         else:
             cur[0], cur[2] = cur[0] + c, e
+    if not d.get("audio_base64") or len(words) != len(text.split()):
+        raise ProviderError("eleven: the response held no audio or no word times for every word")
     return base64.b64decode(d["audio_base64"]), [tuple(w) for w in words]
 
 
@@ -241,7 +267,7 @@ def self_test() -> int:
         def do_POST(self):  # noqa: N802
             body = json.loads(self.rfile.read(int(self.headers["content-length"])))
             hits.append((self.path, {k.lower(): v for k, v in self.headers.items()}, body))
-            code, extra = plan.pop(0) if plan else (200, {})
+            code, extra, patch = plan.pop(0) if plan else (200, {}, {})
             if self.path.startswith("/v1beta/interactions"):
                 out = {"steps": [{"type": "model_output", "content": [
                     {"type": "audio", "data": base64.b64encode(gemini_wav).decode()}]}]}
@@ -252,13 +278,17 @@ def self_test() -> int:
                 out = {"audio_base64": base64.b64encode(pcm).decode(), "alignment": {
                     "characters": list(text), "character_start_times_seconds": [0.05 + i * step for i in range(len(text))],
                     "character_end_times_seconds": [0.05 + (i + 1) * step for i in range(len(text))]}}
-            data = json.dumps(out if code == 200 else {"error": "scripted"}).encode()
+            data = patch if isinstance(patch, bytes) else json.dumps(
+                {**out, **patch} if code == 200 else {"error": "scripted"}).encode()
             self.send_response(code)
-            for k, v in extra.items():
+            for k, v in {"content-length": str(len(data)), **extra}.items():
                 self.send_header(k, v)
-            self.send_header("content-length", str(len(data)))
             self.end_headers()
             self.wfile.write(data)
+
+        def do_GET(self):  # noqa: N802
+            hits.append((self.path, {k.lower(): v for k, v in self.headers.items()}, None))
+            self.send_error(404)
 
         def log_message(self, *a):
             pass
@@ -272,12 +302,14 @@ def self_test() -> int:
             return False
         return False
 
-    def fake_hear(audio):  # hears the last requested line, starting early over the quiet as Whisper does
+    def fake_hear(audio):
         said = "Something else" if garble else hits[-1][2]["input"][0]["content"][0]["text"]
-        return [{"w": w, "start": 0.05 + 0.7 * k, "end": 0.9 + 0.8 * k} for k, w in enumerate(said.split())]
+        heard = [{"w": w, "start": 0.05 + 0.7 * k, "end": 0.9 + 0.8 * k} for k, w in enumerate(said.split())]
+        heard[0]["start"], heard[-1]["end"] = 0.4, heard[-1]["start"] + 0.55
+        return heard
 
-    global hear
-    hear, garble = fake_hear, False
+    global hear, BACKOFF
+    hear, garble, BACKOFF = fake_hear, False, 0.0
     srv = HTTPServer(("127.0.0.1", 0), H)
     threading.Thread(target=srv.serve_forever, daemon=True).start()
     url = f"http://127.0.0.1:{srv.server_port}"
@@ -302,20 +334,44 @@ def self_test() -> int:
             synth("Two words.", d, parse("gemini:Iapetus:gemini-2.5-pro-preview-tts"))
             if len(hits) != 3:
                 fails.append("the cache key ignores the style or the model")
-            b = synth("Three synthetic words.", d, parse("eleven:Mark"))
+            mark = parse("eleven:Mark")
+            b = synth("Three synthetic words.", d, mark)
             path, headers, body = hits[-1]
             if "/v1/text-to-speech/UgBBYS2sOqTuMpoF3BR0/with-timestamps" not in path or body["model_id"] != "eleven_v4" \
-                    or body.get("voice_settings") != {"speed": 0.85} or parse("eleven:Mark@0.8").style != "0.8" \
-                    or headers.get("xi-api-key") != secret:
+                    or body.get("voice_settings") != {"speed": 0.85} or headers.get("xi-api-key") != secret:
                 fails.append(f"ElevenLabs request {path} {body}")
             if [w["w"] for w in b["words"]] != ["Three", "synthetic", "words."] or abs(b["duration"] - 1.0) > 1e-3:
                 fails.append(f"ElevenLabs words {b['words']}")
-            plan[:] = [(429, {"Retry-After": "0"})]
+            n = len(hits)
+            synth("Three synthetic words.", d, parse("eleven:Mark@0.8"))
+            if len(hits) != n + 1 or hits[-1][2]["voice_settings"] != {"speed": 0.8}:
+                fails.append(f"eleven:Mark@0.8 was not voiced again at speed 0.8: {hits[-1][2]}")
+            for spec in ("eleven:Mark@0.5", "eleven:Mark@fast", "eleven:Mark@", "gemini:Iapetus@0.8"):
+                if not raises(lambda: parse(spec), SystemExit):
+                    fails.append(f"the voice {spec} passed")
+            for patch in ({"alignment": None}, {"audio_base64": None}):
+                plan[:] = [(200, {}, patch)]
+                if not raises(lambda: synth("Half an answer.", d, mark), ProviderError):
+                    fails.append(f"an ElevenLabs answer with {patch} did not fail the provider")
+            plan[:] = [(302, {"Location": url + "/stolen"}, {})]
+            n = len(hits)
+            if not raises(lambda: synth("Redirected.", d, iap), ProviderError) or len(hits) != n + 1:
+                fails.append(f"a redirect was followed with the key: {[h[0] for h in hits[n:]]}")
+            plan[:] = [(200, {"content-length": "99999999"}, {})]
+            n = len(hits)
+            synth("Cut off.", d, iap)
+            if len(hits) != n + 2:
+                fails.append(f"a cut-off answer then a whole one took {len(hits) - n} requests, want 2")
+            plan[:] = [(200, {}, b"<html>busy</html>")]
+            n = len(hits)
+            if not raises(lambda: synth("Not JSON.", d, iap), ProviderError) or len(hits) != n + 1:
+                fails.append(f"a non-JSON answer did not fail the provider after one request ({len(hits) - n})")
+            plan[:] = [(429, {"Retry-After": "0"}, {})]
             n = len(hits)
             synth("After a 429.", d, iap)
             if len(hits) != n + 2:
                 fails.append(f"a 429 then 200 took {len(hits) - n} requests, want 2")
-            plan[:] = [(403, {})] * 6
+            plan[:] = [(403, {}, {})] * 6
             n = len(hits)
             if not raises(lambda: synth("Forbidden.", d, iap), ProviderError) or len(hits) != n + 1:
                 fails.append(f"a 403 did not fail the provider after one request ({len(hits) - n})")
@@ -347,19 +403,10 @@ def self_test() -> int:
 
 def main() -> int:
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    p.add_argument("lines", nargs="*")
-    p.add_argument("--cache", type=Path)
-    p.add_argument("--voice", default="gemini:Iapetus")
-    p.add_argument("--style", default=STYLE)
-    p.add_argument("--offline", action="store_true")
     p.add_argument("--self-test", action="store_true")
-    a = p.parse_args()
-    if a.self_test:
+    if p.parse_args().self_test:
         return self_test()
-    if not a.cache or not a.lines:
-        p.error("--cache DIR and at least one line are required")
-    for text in a.lines:
-        print(json.dumps(synth(text, a.cache, parse(a.voice, a.style), a.offline)))
+    p.print_help()
     return 0
 
 

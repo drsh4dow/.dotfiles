@@ -8,13 +8,13 @@ import { H, useFonts, W } from "./theme";
 // One SceneWindow per chapter, in voice.json order, so each incoming window paints over the outgoing one.
 const Film = ({ captions }: { captions: boolean }) => {
   useFonts();
-  const voiceWav = getStaticFiles().find((f) => f.name === "voice.wav");
+  const narration = getStaticFiles().find((f) => f.name === "narration.wav");
   return (
     <AbsoluteFill>
       <SceneWindow id="intro"><Intro /></SceneWindow>
       <SceneWindow id="demo"><Demo /></SceneWindow>
       {captions ? <Captions /> : null}
-      {voiceWav ? <Audio src={voiceWav.src} /> : null}
+      {narration ? <Audio src={narration.src} /> : null}
     </AbsoluteFill>
   );
 };

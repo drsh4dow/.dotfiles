@@ -1,7 +1,7 @@
 import { Easing, interpolate } from "remotion";
 import raw from "../public/voice.json";
 
-// The voice script writes public/voice.json. Times are in seconds.
+// narrate.py's voice.json, copied into public/. Times are in seconds.
 type Voice = {
   fps: number;
   duration: number;
