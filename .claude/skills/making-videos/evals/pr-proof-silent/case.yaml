@@ -1,0 +1,45 @@
+schema_version: "1.1"
+name: pr-proof-silent
+description: A short captions-only proof clip attached to a pull request.
+tags: [plan, web, proof]
+context:
+  scaffold_script: scaffold.sh
+graders:
+  - name: skill-fired
+    type: tool_used
+    tool: Skill
+    arm: with-only
+  - name: caption-holds
+    type: llm
+    focus: {source: file, path: PLAN.md}
+    criteria: >-
+      PASS only if the plan keeps each caption on screen long enough to read, with a stated minimum that grows
+      with the number of words (for example at least 1.5 s plus about 0.3 s per word), and keeps each caption a
+      whole sentence. FAIL if caption timing is unstated or fixed regardless of length.
+  - name: shows-what-it-claims
+    type: llm
+    focus: {source: file, path: PLAN.md}
+    criteria: >-
+      PASS only if every caption claims only what the picture shows at that moment (the second Apply press, the
+      18.00 total, the "Code already applied" message), with the real staging app doing it live, not a mock or
+      stub. FAIL if a caption asserts something the frame cannot show.
+  - name: full-window-real-pointer
+    type: llm
+    focus: {source: file, path: PLAN.md}
+    criteria: >-
+      PASS only if the clip shows the whole browser window without zooming or cropping and the pointer and clicks
+      are visible (the double Apply press is the point). FAIL otherwise.
+  - name: hosted-not-local
+    type: llm
+    focus: {source: file, path: PLAN.md}
+    criteria: >-
+      PASS only if the clip is attached to the PR as an uploaded file or URL that a reviewer can open, the upload
+      is checked (for example re-downloaded or hash compared), and the PR never points at a path on the author's
+      machine. FAIL if the plan links a local path.
+  - name: checks-fit-silent
+    type: llm
+    focus: {source: file, path: PLAN.md}
+    criteria: >-
+      PASS only if the plan checks the exported clip with checks that make sense for a silent captions-only video
+      (caption timing, frames, no long frozen stretches) and does not plan audio or narration checks that cannot
+      apply, nor silently skip checking. FAIL otherwise.

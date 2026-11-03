@@ -10,3 +10,4 @@ web-search.json
 .claude/skills/**/node_modules/
 .claude/skills/**/__pycache__/
 .claude/skills/synced/
+.claude/skills/**/evals/results/

@@ -1,0 +1,43 @@
+schema_version: "1.1"
+name: cli-tutorial
+description: A two-minute narrated tutorial of a command-line tool.
+tags: [plan, tutorial]
+context:
+  scaffold_script: scaffold.sh
+graders:
+  - name: skill-fired
+    type: tool_used
+    tool: Skill
+    arm: with-only
+  - name: real-output
+    type: llm
+    focus: {source: file, path: PLAN.md}
+    criteria: >-
+      PASS only if the terminal output shown in the video comes from actually running the tool (bin/ledgerctl)
+      and capturing what it prints, not from output typed or invented for the video. FAIL otherwise.
+  - name: readable
+    type: llm
+    focus: {source: file, path: PLAN.md}
+    criteria: >-
+      PASS only if the plan sizes terminal text to be readable on a docs page (a stated large font or terminal
+      size, few columns) and keeps each new piece of text on screen long enough to read (a stated rule, such as
+      about one second per three words or holding output until the narration has covered it). FAIL otherwise.
+  - name: teaches-why
+    type: llm
+    focus: {source: file, path: PLAN.md}
+    criteria: >-
+      PASS only if the narration explains why and when to use each command and what its output means (for example
+      the confidence column and exit code 4 meaning needs review), not just what to type. FAIL if it only
+      recites commands.
+  - name: voice-first-human-typing
+    type: llm
+    focus: {source: file, path: PLAN.md}
+    criteria: >-
+      PASS only if the narration is voiced first and the typing and output appear timed to it, with typing at a
+      human pace rather than pasted or instantly shown. FAIL otherwise.
+  - name: checked-and-handed-off
+    type: llm
+    focus: {source: file, path: PLAN.md}
+    criteria: >-
+      PASS only if the plan checks the exported video file itself (for example pauses, caption timing, or
+      watching it) and has someone other than the author review it before hand-off. FAIL otherwise.

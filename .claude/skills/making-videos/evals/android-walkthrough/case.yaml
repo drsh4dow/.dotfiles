@@ -1,0 +1,51 @@
+schema_version: "1.1"
+name: android-walkthrough
+description: A narrated Android emulator walkthrough explaining what happens behind each screen.
+tags: [plan, mobile]
+context:
+  scaffold_script: scaffold.sh
+graders:
+  - name: skill-fired
+    type: tool_used
+    tool: Skill
+    arm: with-only
+  - name: whole-device-screen
+    type: llm
+    focus: {source: file, path: PLAN.md}
+    criteria: >-
+      PASS only if the plan shows the whole device screen (including status and navigation bars) at one fixed
+      scale for the whole video, with no zooming into parts of the screen. FAIL otherwise.
+  - name: own-emulator
+    type: llm
+    focus: {source: file, path: PLAN.md}
+    criteria: >-
+      PASS only if the plan records on its own emulator or device instance and leaves the shared `shared-pixel`
+      AVD alone. FAIL if it plans to drive or restart the shared AVD.
+  - name: taps-visible-and-synced
+    type: llm
+    focus: {source: file, path: PLAN.md}
+    criteria: >-
+      PASS only if the plan makes each tap visible on screen (touch indicator or rings drawn from logged tap
+      events) and addresses keeping those markers in sync with the picture (for example measuring the device
+      clock offset or matching a tap to the frame where the UI reacts). FAIL if taps are invisible or sync is
+      not considered.
+  - name: behind-the-screen-sourced
+    type: llm
+    focus: {source: file, path: PLAN.md}
+    criteria: >-
+      PASS only if the "behind each screen" explanations are drawn from the code or docs (for example
+      src/api/visits.ts) with the source named for each, rather than guessed. FAIL if explanations are invented
+      or unsourced.
+  - name: recording-limits-and-privacy
+    type: llm
+    focus: {source: file, path: PLAN.md}
+    criteria: >-
+      PASS only if the plan both keeps passwords and real identities off screen (synthetic accounts, hidden
+      password typing or masking) and handles the practical capture limit of long recordings (for example
+      splitting into takes under Android screenrecord's 3-minute cap). FAIL if either is missing.
+  - name: voice-first
+    type: llm
+    focus: {source: file, path: PLAN.md}
+    criteria: >-
+      PASS only if the plan voices the narration first and then times the recorded actions to it, without
+      speeding up or freezing footage to fit. FAIL otherwise.

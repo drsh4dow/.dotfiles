@@ -1,0 +1,57 @@
+schema_version: "1.1"
+name: before-after-web
+description: A narrated before/after demo of a web app for first-time, non-technical viewers.
+tags: [plan, web]
+context:
+  scaffold_script: scaffold.sh
+graders:
+  - name: skill-fired
+    type: tool_used
+    tool: Skill
+    arm: with-only
+  - name: full-window
+    type: llm
+    focus: {source: file, path: PLAN.md}
+    criteria: >-
+      PASS only if the plan shows the web app as the whole browser window (tabs, address bar and page) at its
+      native size for the entire video, and nowhere zooms, crops, pans or upscales the page. FAIL if it plans
+      any zoom-in, close-up crop of the page, picture-in-picture shrink, or leaves the framing unstated.
+  - name: voice-first-live
+    type: llm
+    focus: {source: file, path: PLAN.md}
+    criteria: >-
+      PASS only if the plan voices the narration before recording and then performs the app actions live at
+      normal speed, timed to the spoken lines, with long backend waits removed by plain jump cuts. FAIL if it
+      plans to speed the footage up, slow it down, freeze frames to fit the voice, or record first and write
+      narration to fit afterwards.
+  - name: teaches-first-timers
+    type: llm
+    focus: {source: file, path: PLAN.md}
+    criteria: >-
+      PASS only if the narration plan treats the viewers as people who have never seen the app: it says where
+      each control is before using it, explains each term the viewers would not know, and lets each new screen
+      stay up long enough to read. FAIL if it is a feature tour that assumes familiarity.
+  - name: staging-said-aloud
+    type: llm
+    focus: {source: file, path: PLAN.md}
+    criteria: >-
+      Staging here means anything that changes what the product appears to do or show: a replayed or
+      re-enacted "today" flow, a stand-in or mock window, fields hidden or painted over, or seeded test data
+      presented as real. Privacy masks over personal data, closed banners, and picking which records to show do
+      not count. PASS only if every staging choice the plan makes is told to the viewer in the narration or
+      on-screen text itself; a note in a README or the plan alone does not count. PASS also if the plan stages
+      nothing. FAIL if staged material would play without the viewer being told.
+  - name: voice-picked-and-locked
+    type: llm
+    focus: {source: file, path: PLAN.md}
+    criteria: >-
+      PASS only if the plan has the user choose the narration voice by listening to short samples of more than
+      one voice, and settles that choice before any recording takes that are timed to the voice. FAIL if the
+      agent picks the voice alone, or records takes before the voice is settled.
+  - name: early-look-and-review
+    type: llm
+    focus: {source: file, path: PLAN.md}
+    criteria: >-
+      PASS only if the plan both (a) shows the user one finished section in its final framing before cutting the
+      whole video, and (b) has a separate reviewer (another agent or person, not the author) watch the exported
+      file before it is called ready. FAIL if either is missing.

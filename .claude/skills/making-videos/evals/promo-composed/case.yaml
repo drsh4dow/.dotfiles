@@ -1,0 +1,55 @@
+schema_version: "1.1"
+name: promo-composed
+description: A ~90 s composed promo for a big screen, built from real repo facts and one bright screen recording.
+tags: [plan, composed]
+context:
+  scaffold_script: scaffold.sh
+graders:
+  - name: skill-fired
+    type: tool_used
+    tool: Skill
+    arm: with-only
+  - name: claims-traced
+    type: llm
+    focus: {source: file, path: PLAN.md}
+    criteria: >-
+      PASS only if every number or fact the script states comes from the repo files (README.md,
+      docs/benchmarks.md, docs/screens.md) and the plan ties each claim to its source, and the plan invents no
+      new numbers, users or features. FAIL if the script states a number or capability the files do not give.
+  - name: cued-to-voice
+    type: llm
+    focus: {source: file, path: PLAN.md}
+    criteria: >-
+      PASS only if the plan voices the narration first and times each visual change to the spoken word that names
+      it (for example from word timestamps), rather than fixed durations or hand-typed frame numbers. FAIL
+      otherwise.
+  - name: big-screen-look
+    type: llm
+    focus: {source: file, path: PLAN.md}
+    criteria: >-
+      PASS only if the plan sets a look fit for a large auditorium screen: large text (a stated minimum size),
+      few words on screen, no bullet-list or table slides, colour used with a consistent meaning, and continuous
+      purposeful motion so no shot sits still for long. FAIL if it plans slides of bullets or leaves size and
+      motion unaddressed.
+  - name: bright-footage-and-privacy
+    type: llm
+    focus: {source: file, path: PLAN.md}
+    criteria: >-
+      PASS only if the plan handles media/dashboard.mp4 both ways: it masks or cuts around the staff email
+      (0:12 to 0:31), and it avoids a dark dip or flash when that white footage meets the rest of the film (for
+      example a cross-dissolve rather than fading through black, or a check of brightness at the cuts). FAIL if
+      either is missing.
+  - name: audio-and-captions
+    type: llm
+    focus: {source: file, path: PLAN.md}
+    criteria: >-
+      PASS only if the plan states a loudness target for the narration, makes captions readable in the room
+      (burned in, or another stated way), and, if it uses music at all, keeps the music well under the voice
+      (ducked, or a stated level below it). FAIL if loudness or captions are not addressed, or if music is
+      planned with no level relative to the voice.
+  - name: reviewed-and-handed-off
+    type: llm
+    focus: {source: file, path: PLAN.md}
+    criteria: >-
+      PASS only if the plan has a separate reviewer watch the exported file before it is called done, measures
+      the exported file itself (not the project), and hands the user one final file path. FAIL if any is missing.
