@@ -10,7 +10,9 @@
 
 A voice is PROVIDER:VOICE[:MODEL]. gemini:Iapetus is Gemini's prebuilt voice Iapetus on gemini-3.8-flash-tts;
 eleven:Mark is ElevenLabs voice UgBBYS2sOqTuMpoF3BR0 on eleven_v4. Any other Gemini voice name or ElevenLabs
-voice id works too. --style is Gemini's speaking-style prompt (default STYLE below); ElevenLabs ignores it.
+voice id works too. --style is Gemini's speaking-style prompt (default STYLE below). ElevenLabs takes no prompt;
+its pace is a speed after the voice, eleven:Mark@0.8 (0.7 to 1.2, default ELEVEN_SPEED, which puts Mark near
+165 words a minute). Slow a voice this way, never by stretching its audio.
 ElevenLabs returns character times. Gemini returns none, so local faster-whisper (WHISPER_MODEL, default
 small.en) hears the clip and its words are matched to the line by letters; a clip that does not say the line is
 voiced again, up to 3 times. Either way each word's start and end then snap to the audible audio (10 ms frames
@@ -51,6 +53,7 @@ import _media  # noqa: E402
 
 SR, HOP, LOUD_DB, MAX_WAIT, MIN_HEARD = 48000, 0.01, -35.0, 300, 0.7
 MODELS = {"gemini": "gemini-3.8-flash-tts", "eleven": "eleven_v4"}
+ELEVEN_SPEED = "0.85"
 ELEVEN_NAMES = {"Mark": "UgBBYS2sOqTuMpoF3BR0"}
 STYLE = "a calm, plain-spoken colleague narrating an internal product walkthrough, steady pace"
 API = {"gemini": ("https://generativelanguage.googleapis.com", "GEMINI_API_KEY", "x-goog-api-key"),
@@ -76,7 +79,8 @@ def parse(spec: str, style: str = STYLE) -> Voice:
     if provider not in MODELS or not voice:
         raise SystemExit(f"tts.py: voice {spec!r} is not PROVIDER:VOICE[:MODEL] with PROVIDER gemini or eleven")
     if provider == "eleven":
-        return Voice(provider, model or MODELS[provider], ELEVEN_NAMES.get(voice, voice), "")
+        voice, _, speed = voice.partition("@")
+        return Voice(provider, model or MODELS[provider], ELEVEN_NAMES.get(voice, voice), speed or ELEVEN_SPEED)
     return Voice(provider, model or MODELS[provider], voice, style)
 
 
@@ -122,7 +126,7 @@ def _gemini(text: str, v: Voice) -> tuple[bytes, list[str]]:
 
 def _eleven(text: str, v: Voice) -> tuple[bytes, list[tuple]]:
     d = _post("eleven", f"/v1/text-to-speech/{v.voice}/with-timestamps?output_format=pcm_24000",
-              {"text": text, "model_id": v.model})
+              {"text": text, "model_id": v.model, "voice_settings": {"speed": float(v.style)}})
     al = d.get("alignment") or {}
     words, cur = [], None
     for c, s, e in zip(al.get("characters") or [], al.get("character_start_times_seconds") or [],
@@ -301,6 +305,7 @@ def self_test() -> int:
             b = synth("Three synthetic words.", d, parse("eleven:Mark"))
             path, headers, body = hits[-1]
             if "/v1/text-to-speech/UgBBYS2sOqTuMpoF3BR0/with-timestamps" not in path or body["model_id"] != "eleven_v4" \
+                    or body.get("voice_settings") != {"speed": 0.85} or parse("eleven:Mark@0.8").style != "0.8" \
                     or headers.get("xi-api-key") != secret:
                 fails.append(f"ElevenLabs request {path} {body}")
             if [w["w"] for w in b["words"]] != ["Three", "synthetic", "words."] or abs(b["duration"] - 1.0) > 1e-3:

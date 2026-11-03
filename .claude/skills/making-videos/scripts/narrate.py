@@ -97,7 +97,7 @@ def tighten(clip: dict) -> dict:
     """The clip's audio with each quiet run inside its speech cut to LONGEST_PAUSE, its word times moved to match."""
     a = _media.samples(clip["wav"], SR)
     quiet, cuts = ~tts.loud(a), []
-    k, last = int(clip["voiced_start"] / tts.HOP), int(clip["voiced_end"] / tts.HOP)
+    k, last = int(clip["voiced_start"] / tts.HOP), min(int(clip["voiced_end"] / tts.HOP), len(quiet))
     while k < last:
         j = k
         while j < last and quiet[j]:

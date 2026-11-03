@@ -14,7 +14,7 @@ Pass `--profile captions` for a captions-only video with no voice. The default i
 | Overlay allowlist | `overlays.py T` | anything over the picture but rings and outlines; a self-test the detector misses |
 | What changed between two exports | `framediff.py OLD NEW --allow T0-T1` | a changed frame outside the spans you meant to change, by the worst 8x8 patch, so a small email still shows |
 
-`framing.py` and `overlays.py` apply to recorded takes. A composed film has no `timeline.json` from `cut.py`; run `check.sh` and `sync.py` on it with a timeline built from `voice.json` and the caption box.
+`timeline.json` names the cut before `mix.sh`, so pass `--video FINAL.mp4` to `framing.py`, `overlays.py` and `sync.py` to measure the mixed export. `framing.py` and `overlays.py` apply to recorded takes. A composed film has no `timeline.json` from `cut.py`; run `check.sh` and `sync.py` on it with a timeline built from `voice.json` and the caption box.
 
 ## By eye
 
