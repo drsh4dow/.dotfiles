@@ -11,7 +11,7 @@ narrate.py is the command; it imports synth and parse from here. A voice is PROV
 gemini:Iapetus is Gemini's prebuilt voice Iapetus on gemini-3.8-flash-tts; eleven:Mark is ElevenLabs voice
 UgBBYS2sOqTuMpoF3BR0 on eleven_v4. Any other Gemini voice name or ElevenLabs voice id works too. Gemini takes a
 speaking-style prompt (default STYLE below). ElevenLabs takes no prompt; its pace is a speed after the voice,
-eleven:Mark@0.8 (0.7 to 1.2, default ELEVEN_SPEED, which puts Mark near 165 words a minute). Slow a voice this way,
+eleven:Mark@0.8 (0.8 to 1.2, default ELEVEN_SPEED, which puts Mark near 165 words a minute). Slow a voice this way,
 never by stretching its audio.
 ElevenLabs returns character times. Gemini returns none, so local faster-whisper (WHISPER_MODEL, default
 small.en) hears the clip and its words are matched to the line by letters; a clip that does not say the line is
@@ -92,8 +92,8 @@ def parse(spec: str, style: str = STYLE) -> Voice:
         speed = float(speed) if at else ELEVEN_SPEED
     except ValueError:
         speed = None
-    if speed is None or not 0.7 <= speed <= 1.2:
-        raise SystemExit(f"tts.py: {spec!r}: an ElevenLabs speed is a number from 0.7 to 1.2")
+    if speed is None or not 0.8 <= speed <= 1.2:
+        raise SystemExit(f"tts.py: {spec!r}: an ElevenLabs speed is a number from 0.8 to 1.2")
     return Voice(provider, model or MODELS[provider], ELEVEN_NAMES.get(voice, voice), "", speed)
 
 
