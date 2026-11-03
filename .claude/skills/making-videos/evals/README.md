@@ -19,6 +19,10 @@ These pass only if the rules carry over to a case the skill has no worked steps 
 
 When a change to the skill is aimed at one of these, the check no longer measures generalization. Write a new one.
 
+## Regression guards
+
+`own-emulator`, `behind-the-screen-sourced`, `real-output`, `teaches-why`, `whole-simulator-screen`, `honest-about-host` and `checks-fit-silent` pass with no skill too. They guard against the skill making a plan worse; read the score delta from the other graders.
+
 ## What plan cases cannot see
 
 Pacing, looks and sync live in the exported file. Measure a real export with the scripts in `references/checks.md` and a watcher from `references/watcher-brief.md`. The plugin eval sandbox has no network, so voices and real apps run outside it.

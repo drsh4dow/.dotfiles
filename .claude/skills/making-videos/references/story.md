@@ -28,7 +28,6 @@ Pick the shape that fits the one sentence the viewer should leave with.
 - Use the viewer's words. Define a term the first time it is spoken. Never put an internal name, enum value or ticket key on screen without saying what it means.
 - A line claims only what its frame shows. A fact the frame cannot show, such as the deployed commit or the signed-in account, goes on screen or out of the line.
 - Write so speech recognition hears it as written: the sync check compares captions with what it hears.
-- A captions-only line is one whole sentence on screen for at least 1.5 s plus 0.3 s per word.
 
 ## CLAIMS.md
 
