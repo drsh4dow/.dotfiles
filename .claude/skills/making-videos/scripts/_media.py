@@ -8,16 +8,18 @@ canvas pixels of the export unless named otherwise:
     {
       "video": "/abs/cut.mp4", "fps": 30, "canvas": [W, H], "total": 12.3,
       "shots": [{"take": "/abs/t1.mp4", "size": [w, h], "view": [x, y, vw, vh], "out0": 0.0, "out1": 6.0,
-                 "pieces": [[o0, o1, "play", s0, s1, speed], [o0, o1, "hold", s0, null, 0]]}],
+                 "pieces": [[o0, o1, s0, s1]]}],
       "marks": [{"kind": "outline", "t0": 1.0, "t1": 2.5, "box": [x0, y0, x1, y1], "color": [r, g, b]},
                 {"kind": "ring", "t0": 3.0, "t1": 3.65, "center": [x, y], "radius": 44}],
       "caption_box": [x, y, w, h] or null,
       "captions": [{"text": "...", "show": 0.25, "hide": 2.9}],
       "chips": [{"text": "26 s later", "t0": 4.0, "t1": 5.2, "box": [x, y, w, h]}],
-      "lines": [{"text": "...", "start": 0.3, "end": 2.8}]
+      "lines": [{"text": "...", "start": 0.3, "end": 2.8}],
+      "voice": "/abs/cut-voice.wav" or null
     }
 
-A shot's view is where the take's whole viewport sits in the export; framing.py proves the pixels agree.
+A piece plays take seconds [s0, s1] at 1.0x over output seconds [o0, o1]. A shot's view is where the take's whole
+viewport sits in the export; framing.py proves the pixels agree. voice is the voice track on the export's clock.
 """
 from __future__ import annotations
 
@@ -137,11 +139,10 @@ class Timeline:
 
     @staticmethod
     def src_at(shot: dict, t: float) -> float:
-        last = shot["pieces"][-1]
-        for o0, o1, kind, s0, s1, speed in shot["pieces"]:
-            if t < o1 or [o0, o1] == last[:2]:
-                return s0 if kind == "hold" else min(s1, s0 + max(0.0, t - o0) * speed)
-        return last[3]
+        for o0, o1, s0, s1 in shot["pieces"]:
+            if t < o1:
+                return s0 + max(0.0, t - o0)
+        return shot["pieces"][-1][3]
 
     def marks_at(self, t: float) -> list[dict]:
         return [m for m in self.d.get("marks", []) if m["t0"] <= t <= m["t1"]]
