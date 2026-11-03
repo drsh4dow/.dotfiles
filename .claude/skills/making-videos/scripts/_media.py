@@ -92,6 +92,21 @@ def samples(path, sr: int) -> np.ndarray:
     return np.frombuffer(pcm, np.float32).copy()
 
 
+def loudness_db(a: np.ndarray, sr: int, hop: float = 0.01) -> np.ndarray:
+    """Mean power of each hop-second frame, in dBFS, floored at -60."""
+    n = int(hop * sr)
+    return np.maximum(10 * np.log10(np.mean(a[: len(a) // n * n].reshape(-1, n) ** 2, axis=1) + 1e-12), -60.0)
+
+
+def voice_match(export, voice, sr: int = 16000) -> float:
+    """Correlation at zero lag of the loudness of an export's audio and a voice track: near 1 when the export
+    carries that voice on its own clock, near 0 or below when the voice is missing, shifted or another one."""
+    e, v = loudness_db(samples(export, sr), sr), loudness_db(samples(voice, sr), sr)
+    n = min(len(e), len(v))
+    e, v = e[:n], v[:n]
+    return float(np.corrcoef(e, v)[0, 1]) if n > 1 and e.std() and v.std() else 0.0
+
+
 def write_wav(path, a: np.ndarray, sr: int) -> None:
     subprocess.run(["ffmpeg", "-v", "error", "-y", "-f", "f32le", "-ar", str(sr), "-ac", "1", "-i", "-", str(path)],
                    input=np.asarray(a, np.float32).tobytes(), check=True)
