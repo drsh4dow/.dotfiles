@@ -1,12 +1,12 @@
 # Composed films
 
-Promos, explainers and terminal tutorials drawn in code and cued to the voice. Copy `templates/remotion/` into `~/Videos/<project>/src/film/`. Its `README.md` says how to install, preview and render.
+Promos, explainers and terminal tutorials drawn in code and cued to the voice. Copy `templates/remotion/` into `~/Videos/<project>/src/film/`. Its `README.md` has the commands to set it up, preview, render and type-check it, and the mistakes that broke renders before.
 
 For a math-style explainer, the pi skill at `~/.pi/agent/skills/catchup-video` is a Manim toolkit. The user picked its look.
 
 ## Cue to the voice
 
-- Copy `voice.json` into `public/voice.json` and `narration.wav` into `public/voice.wav`. Cue every change on a spoken word with `at(line, word)` from `src/cues.ts`, never on a hand-typed frame. Words match the `say` text, so it is `at("d6", "three-sixty's")`.
+- Cue every change on a spoken word with `at(line, word)` from `src/cues.ts`, never on a hand-typed frame. Words match the `say` text, so it is `at("d6", "three-sixty's")`.
 - `at()` already lands 4 frames before the word, and `SceneWindow` cuts 9 frames before a chapter's first word. Add no offset of your own.
 - Something moves at least every 2 s. Build on one picture through a chapter (things light up, connect, get checked) rather than cutting to unrelated pictures.
 
@@ -27,9 +27,6 @@ The user's favourite is 3Blue1Brown with code aesthetics. Offer the look as its 
 - Mask on full-size frames before scaling, with an opaque box in the surrounding colour, never a blur. A real email once sat in every sidebar frame of a source clip. Prove every mask box is flat on every frame, and OCR the film.
 - A terminal tutorial shows real output. Run each command, save its output, and type it through the `Terminal` part verbatim. Type commands at a human pace and hold each result long enough to read.
 
-## Render
+## Helpers
 
-- Stills, chapter clips and the full render: the commands in the template's `README.md`. Remotion ignores `--frame-range` and renders the whole film; that wrong flag, copied into three helpers' briefs, overloaded the machine.
-- Fonts load once through the `useFonts` hook in `src/theme.ts`, with a `delayRender` timeout. Fonts loaded at module scope hung renders while stills worked fine. Subset big fonts (`uvx --from 'fonttools[woff]' pyftsubset … --flavor=woff2`).
-- `npx tsc --noEmit` clean, run without a pipe: `tsc | head` exits 0 over type errors.
 - When chapters go to helpers, give them one shared brief: how the film is built, the look, truth and privacy, how to check a chapter, and what to report. Each helper owns its chapter files only.
