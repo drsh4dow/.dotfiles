@@ -201,7 +201,7 @@ def self_test() -> int:
             _media.write_video(d / f"{name}.mp4", frames(), 520, 320, fps)
             tl = {"video": str(d / f"{name}.mp4"), "fps": fps, "canvas": [520, 320], "total": secs, "marks": marks,
                   "shots": [{"take": str(d / "take.mp4"), "size": [tw, th], "view": view, "out0": 0, "out1": secs,
-                             "pieces": [[0, secs, "play", 0, secs, 1.0]]}]}
+                             "pieces": [[0, secs, 0, secs]]}]}
             (d / f"{name}.json").write_text(json.dumps(tl))
             return run(d / f"{name}.json", None, d / name, 4)[0]
 

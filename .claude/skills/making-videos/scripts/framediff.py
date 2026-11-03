@@ -5,14 +5,15 @@
 # ///
 """List the spans where two renders of a video differ, so a recut can prove it changed only what it meant to.
 
-    framediff.py OLD.mp4 NEW.mp4 [--threshold 8.0] [--allow T0-T1 ...]
+    framediff.py OLD.mp4 NEW.mp4 [--threshold 8.0] [--allow T0-T1] [--allow T0-T1] ...
     framediff.py --self-test
 
 Decodes both frame by frame, by index, at 384x216 grey, splits each frame into 8x8 patches, and lists each run
 of frames whose worst patch differs by more than --threshold (mean absolute difference, 0-255). x264 noise
 between two encodes of one picture stays under it, and the report prints the worst patch of the frames it
 counts as unchanged so you can see the margin. A whole-frame mean would miss a small change: an unmasked
-300x50 px email is 0.7 % of a 1080p frame. Frames past the end of the shorter file count as changed.
+300x50 px email is 0.7 % of a 1080p frame. Frames past the end of the shorter file count as changed, and two
+files at different frame rates fail, because frame n is then a different moment in each.
 Exit 1 when a changed frame lies outside every --allow span (seconds), 0 otherwise.
 """
 from __future__ import annotations
@@ -42,7 +43,10 @@ def grey(path: Path):
 
 
 def run(old: Path, new: Path, threshold: float, allow: list[tuple[float, float]]) -> tuple[bool, list[str]]:
-    fps = _media.probe(old)["fps"]
+    fps, new_fps = _media.probe(old)["fps"], _media.probe(new)["fps"]
+    if abs(fps - new_fps) > 1e-3:
+        return False, [f"{old.name} runs at {fps:.3f} fps and {new.name} at {new_fps:.3f}: frames by index do not compare",
+                       "Verdict: FAIL"]
     peaks = [float("inf") if a is None or b is None else
              float(np.abs(a - b).reshape(H // P, P, W // P, P).mean(axis=(1, 3)).max())
              for a, b in zip_longest(grey(old), grey(new))]
@@ -78,11 +82,15 @@ def self_test() -> int:
         cases = [("a re-encode of the same picture", recode("noise.mp4"), [], True),
                  ("a 100x17 px box for 1 s, not allowed", email, [], False),
                  ("a 100x17 px box for 1 s, allowed 0.9-2.1 s", email, [(0.9, 2.1)], True),
-                 ("a recut 1 s shorter", recode("short.mp4", "-t", "2"), [], False)]
+                 ("a recut 1 s shorter", recode("short.mp4", "-t", "2"), [], False),
+                 ("the same picture at 25 fps", recode("fps25.mp4", "-r", "25"), [(0, 3)], False)]
         for what, new, allow, want in cases:
             ok, lines = run(d / "old.mp4", new, 8.0, allow)
             if ok != want:
                 fails.append(f"{what}: {'PASS' if ok else 'FAIL'}, want {'PASS' if want else 'FAIL'}: {lines[0]}")
+        cli = [sys.executable, __file__, str(d / "old.mp4"), str(email), "--allow", "0-0.5", "--allow", "0.9-2.1"]
+        if subprocess.run(cli, capture_output=True).returncode != 0:
+            fails.append("the box, allowed by a second --allow on the command line, failed")
         ok, lines = run(d / "old.mp4", email, 8.0, [])
         if not any("frames 30-60 " in line for line in lines):
             fails.append(f"the box (frames 30-60) was not reported as one span: {lines[1:-2]}")
@@ -97,11 +105,7 @@ def main() -> int:
         return 0
     if a[0] == "--self-test":
         return self_test()
-    allow, i = [], a.index("--allow") + 1 if "--allow" in a else len(a)
-    while i < len(a) and not a[i].startswith("--"):
-        t0, t1 = a[i].split("-")
-        allow.append((float(t0), float(t1)))
-        i += 1
+    allow = [tuple(map(float, a[i + 1].split("-"))) for i, f in enumerate(a) if f == "--allow"]
     threshold = float(a[a.index("--threshold") + 1]) if "--threshold" in a else 8.0
     ok, lines = run(Path(a[0]), Path(a[1]), threshold, allow)
     print("\n".join(lines))

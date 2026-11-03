@@ -8,16 +8,18 @@ canvas pixels of the export unless named otherwise:
     {
       "video": "/abs/cut.mp4", "fps": 30, "canvas": [W, H], "total": 12.3,
       "shots": [{"take": "/abs/t1.mp4", "size": [w, h], "view": [x, y, vw, vh], "out0": 0.0, "out1": 6.0,
-                 "pieces": [[o0, o1, "play", s0, s1, speed], [o0, o1, "hold", s0, null, 0]]}],
+                 "pieces": [[o0, o1, s0, s1]]}],
       "marks": [{"kind": "outline", "t0": 1.0, "t1": 2.5, "box": [x0, y0, x1, y1], "color": [r, g, b]},
                 {"kind": "ring", "t0": 3.0, "t1": 3.65, "center": [x, y], "radius": 44}],
       "caption_box": [x, y, w, h] or null,
       "captions": [{"text": "...", "show": 0.25, "hide": 2.9}],
       "chips": [{"text": "26 s later", "t0": 4.0, "t1": 5.2, "box": [x, y, w, h]}],
-      "lines": [{"text": "...", "start": 0.3, "end": 2.8}]
+      "lines": [{"text": "...", "start": 0.3, "end": 2.8}],
+      "voice": "/abs/cut-voice.wav" or null
     }
 
-A shot's view is where the take's whole viewport sits in the export; framing.py proves the pixels agree.
+A piece plays take seconds [s0, s1] at 1.0x over output seconds [o0, o1]. A shot's view is where the take's whole
+viewport sits in the export; framing.py proves the pixels agree. voice is the voice track on the export's clock.
 """
 from __future__ import annotations
 
@@ -90,6 +92,21 @@ def samples(path, sr: int) -> np.ndarray:
     return np.frombuffer(pcm, np.float32).copy()
 
 
+def loudness_db(a: np.ndarray, sr: int, hop: float = 0.01) -> np.ndarray:
+    """Mean power of each hop-second frame, in dBFS, floored at -60."""
+    n = int(hop * sr)
+    return np.maximum(10 * np.log10(np.mean(a[: len(a) // n * n].reshape(-1, n) ** 2, axis=1) + 1e-12), -60.0)
+
+
+def voice_match(export, voice, sr: int = 16000) -> float:
+    """Correlation at zero lag of the loudness of an export's audio and a voice track: near 1 when the export
+    carries that voice on its own clock, near 0 or below when the voice is missing, shifted or another one."""
+    e, v = loudness_db(samples(export, sr), sr), loudness_db(samples(voice, sr), sr)
+    n = min(len(e), len(v))
+    e, v = e[:n], v[:n]
+    return float(np.corrcoef(e, v)[0, 1]) if n > 1 and e.std() and v.std() else 0.0
+
+
 def write_wav(path, a: np.ndarray, sr: int) -> None:
     subprocess.run(["ffmpeg", "-v", "error", "-y", "-f", "f32le", "-ar", str(sr), "-ac", "1", "-i", "-", str(path)],
                    input=np.asarray(a, np.float32).tobytes(), check=True)
@@ -137,11 +154,10 @@ class Timeline:
 
     @staticmethod
     def src_at(shot: dict, t: float) -> float:
-        last = shot["pieces"][-1]
-        for o0, o1, kind, s0, s1, speed in shot["pieces"]:
-            if t < o1 or [o0, o1] == last[:2]:
-                return s0 if kind == "hold" else min(s1, s0 + max(0.0, t - o0) * speed)
-        return last[3]
+        for o0, o1, s0, s1 in shot["pieces"]:
+            if t < o1:
+                return s0 + max(0.0, t - o0)
+        return shot["pieces"][-1][3]
 
     def marks_at(self, t: float) -> list[dict]:
         return [m for m in self.d.get("marks", []) if m["t0"] <= t <= m["t1"]]
