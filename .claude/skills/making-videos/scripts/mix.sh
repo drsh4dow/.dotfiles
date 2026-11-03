@@ -10,7 +10,7 @@
 # full music. The bed starts --music-in s into its track: pick it so the track's own ending, which music
 # generators write as a resolve and decay, lands on the end card instead of under a fade. A 1 s fade in and a
 # 0.8 s fade out frame it. The mix gets two-pass linear loudnorm to -16 LUFS integrated, true peak at most
-# -1.5 dBTP, and is muxed with the video stream and any subtitle track (both copied) as AAC 192k with faststart,
+# -2 dBTP, and is muxed with the video stream and any subtitle track (both copied) as AAC 192k with faststart,
 # cut to the video's length. With no --music the voice alone is normalised and muxed. Needs ffmpeg and jq.
 set -euo pipefail
 
@@ -20,7 +20,8 @@ self_test() {
   trap 'rm -rf "$d"' RETURN
   level() { ffmpeg -hide_banner -nostats -ss "$2" -t "$3" -i "$1" -af "$4,volumedetect" -f null - 2>&1 | sed -n 's/.*mean_volume: \(-\{0,1\}[0-9.]*\) dB/\1/p'; }
   is() { awk "BEGIN { exit !($1) }" || { echo "  $2 ($1)"; rc=1; }; }
-  ffmpeg -v error -f lavfi -i testsrc2=s=320x200:r=30:d=30 -c:v libx264 -pix_fmt yuv420p "$d/v.mp4"
+  printf '1\n00:00:01,000 --> 00:00:03,000\nA caption.\n\n' > "$d/v.srt"
+  ffmpeg -v error -f lavfi -i testsrc2=s=320x200:r=30:d=30 -i "$d/v.srt" -c:v libx264 -pix_fmt yuv420p -c:s mov_text "$d/v.mp4"
   ffmpeg -v error -f lavfi -i "sine=f=1000:d=28,volume='gte(t,1)*lt(t,25)*lt(mod(t-1,3),2)':eval=frame" -ar 48000 "$d/voice.wav"
   ffmpeg -v error -f lavfi -i "sine=f=100:d=40,volume='0.1*gte(t,2)':eval=frame" -ar 44100 "$d/bed.wav"
   for name in plain music; do
@@ -34,6 +35,7 @@ self_test() {
     is "$i >= -16.5 && $i <= -15.5" "$name: integrated loudness $i LUFS, want -16 +/- 0.5"
     is "$tp <= -1.5" "$name: true peak $tp dBTP, want at most -1.5"
     [ "$(ffprobe -v error -select_streams a -show_entries stream=codec_name -of csv=p=0 "$f")" = aac ] || { echo "  $name: audio is not AAC"; rc=1; }
+    [ "$(ffprobe -v error -select_streams s -show_entries stream=codec_name -of csv=p=0 "$f")" = mov_text ] || { echo "  $name: the subtitle track was lost"; rc=1; }
     is "$(ffprobe -v error -show_entries format=duration -of csv=p=0 "$f") - 30 < 0.05" "$name: longer than the 30 s video"
     [ "$(grep -aobm2 -E 'moov|mdat' "$f" | head -1 | cut -d: -f2)" = moov ] || { echo "  $name: no faststart (mdat before moov)"; rc=1; }
     onset="$(ffmpeg -hide_banner -nostats -i "$f" -af "highpass=f=500,silencedetect=noise=-30dB:d=0.3" -f null - 2>&1 | sed -n 's/.*silence_end: \([0-9.]*\).*/\1/p' | head -1)"
