@@ -52,6 +52,8 @@ no hand fixing, in the full cut and in its chapter's preview alike.
 Rules the cutter enforces (exit 2): pieces only play, inside their take; one scale for every take; the slot
 inside the canvas; every text box outside the slot; captions fit caption_rows; every shot names a chapter this
 cut voices, in voice order, and the shots before a chapter reach its window; the voice ends before the picture.
+
+The picture ends at most TAIL s after the last line, so a take that runs on cannot leave a frozen, silent tail.
 """
 from __future__ import annotations
 
@@ -75,6 +77,7 @@ CAPTION_LEAD = 0.05
 RING_DUR, RING_MAX = 0.65, 44
 OUTLINE_PAD, OUTLINE_W, FADE = 4, 3, 0.2
 CHIP_FOR = 1.2
+TAIL = 0.7
 
 
 class EditError(SystemExit):
@@ -236,9 +239,7 @@ class Cut:
                     raise EditError(f"chapter '{ch}' starts at {want:.2f} s on the output clock, but the shots before it "
                                     f"end at {t:.2f} s; play more take time, or give each earlier chapter its shot")
                 if self.shots:
-                    end_at(self.shots[-1]["pieces"], want)
-                    self.shots[-1]["out1"] = want
-                    self.chips = [c for c in self.chips if c["t0"] < want]
+                    self.end_last_shot(want)
                 t = want
             pieces, chips = plan_pieces(s, t, tk)
             if chips and not e.get("chip_box"):
@@ -247,14 +248,23 @@ class Cut:
             self.shots.append({"take": str(tk.path), "_chapter": ch, "size": [tk.w, tk.h], "view": self.view(tk),
                                "out0": t, "out1": pieces[-1][1], "pieces": pieces, "_tk": tk, "_edit": s})
             t = pieces[-1][1]
-        self.total = t
-        self.marks = [m for shot in self.shots for m in self.shot_marks(shot)]
         self.lines = [ln | {"start": ln["start"] - self.lo, "end": ln["end"] - self.lo}
                       for ln in voice["lines"] if pick in (None, ln["chapter"])]
-        if self.lines[-1]["end"] > self.total:
-            raise EditError(f"the voice ends at {self.lines[-1]['end']:.2f} s, after the picture ({self.total:.2f} s); "
+        if self.lines[-1]["end"] > t:
+            raise EditError(f"the voice ends at {self.lines[-1]['end']:.2f} s, after the picture ({t:.2f} s); "
                             "play more take time")
+        self.total = min(t, self.lines[-1]["end"] + TAIL)
+        if self.shots[-1]["out0"] >= self.total:
+            raise EditError(f"shot {self.shots[-1]['take']} starts at {self.shots[-1]['out0']:.2f} s, after the cut ends "
+                            f"at {self.total:.2f} s ({TAIL} s after the last line); drop it")
+        self.end_last_shot(self.total)
+        self.marks = [m for shot in self.shots for m in self.shot_marks(shot)]
         self.plan_captions()
+
+    def end_last_shot(self, t: float) -> None:
+        end_at(self.shots[-1]["pieces"], t)
+        self.shots[-1]["out1"] = t
+        self.chips = [c for c in self.chips if c["t0"] < t]
 
     def shot_marks(self, shot: dict) -> list[dict]:
         s, tk, pieces, view, sc = shot["_edit"], shot["_tk"], shot["pieces"], shot["view"], self.scale
@@ -478,7 +488,7 @@ def self_test() -> int:
         lead, wait = 1.0, (2.6, 6.6)       # take t2 waits 1 s, then a backend wait from 2.6 s to 6.6 s
         (d / "takes").mkdir()
         _media.synth_take(d / "takes" / "t1.mp4", 640, 400, 6.0)
-        _media.synth_take(d / "takes" / "t2.mp4", 480, 400, 11.5)   # a narrower take: same scale, centred
+        _media.synth_take(d / "takes" / "t2.mp4", 480, 400, 14.0)   # a narrower take: same scale, centred
         (d / "takes" / "t1.events.json").write_text(json.dumps({"width": 640, "height": 400, "events": [
             {"t": 0.5 + word["synthetic"], "kind": "click", "x": 320, "y": 200, "label": "save"},
             {"t": 0.5, "kind": "mark", "label": "row", "box": {"x": 24, "y": 60, "w": 300, "h": 12}}]}))
@@ -488,7 +498,7 @@ def self_test() -> int:
         t1 = {"take": "takes/t1.mp4", "chapter": "one", "pieces": [{"play": [0.5, 6]}],
               "outlines": [{"src": [0.6, 1.8], "mark": "row"}]}
         t2 = {"take": "takes/t2.mp4", "chapter": "two",
-              "pieces": [{"play": [lead, wait[0]]}, {"play": [wait[1], 11.5], "chip": "auto"}]}
+              "pieces": [{"play": [lead, wait[0]]}, {"play": [wait[1], 14.0], "chip": "auto"}]}
         edit = {"out": "cut.mp4", "fps": 30, "canvas": [960, 600], "page": {"slot": [140, 10, 800, 500]},
                 "frame": {"color": [100, 116, 139], "width": 2}, "caption_box": [0, 516, 960, 84], "caption_size": 24,
                 "chip_box": [8, 20, 124, 36], "labels": [{"box": [8, 70, 124, 60], "text": "Synthetic", "t0": 0, "t1": 99}],
@@ -512,8 +522,8 @@ def self_test() -> int:
 
         tl = render(edit)
         near(rises("cut-voice.wav"), [ln["start"] for ln in voice["lines"]], "the full cut's voice rises")
-        near([t for s in tl["shots"] for t in (s["out0"], s["out1"])], [0, two, two, two + 1.6 + 4.9],
-             "the full cut's shots, chapter one's cut short at chapter two's window,")
+        near([t for s in tl["shots"] for t in (s["out0"], s["out1"])], [0, two, two, voice["lines"][-1]["end"] + TAIL],
+             "the full cut's shots, chapter one's cut short at chapter two's window, the last TAIL s after the voice,")
         near([m["t0"] for m in tl["marks"] if m["kind"] == "ring"], [word["synthetic"], word["narrower"], word["after"]],
              "rings of clicks fired by the timing rule")
         if tl["voice"] != str(d / "cut-voice.wav") or _media.probe(d / "cut.mp4")["audio"]:
@@ -556,6 +566,8 @@ def self_test() -> int:
                                (dict(edit, page={"slot": [-100, 10, 800, 500]}), "a slot off the canvas", "canvas"),
                                (dict(edit, chapter="nope"), "a chapter voice.json does not have", "nope"),
                                (dict(edit, shots=[t1, t2, t1]), "shots out of chapter order", "order"),
+                               (dict(edit, shots=[t1, t2, dict(t2, pieces=[{"play": [13, 14]}])]), "a shot after the voice ends",
+                                "drop it"),
                                (dict(edit, chapter="two"), "a preview with another chapter's shot", "'one'"),
                                (shot1(pieces=[{"play": [0.5, 2]}]), "a shot that ends before the next window", "play more"),
                                (shot1(pieces=[{"play": [0.5, 7]}]), "a piece past the take's end", "freeze hold"),
