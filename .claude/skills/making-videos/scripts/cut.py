@@ -422,7 +422,7 @@ class Cut:
         shot = next((s for s in self.shots if t < s["out1"]), self.shots[-1])
         src = _media.Timeline.src_at(shot, t)
         tk = shot["_tk"]
-        frame = _media.frames_near(tk.path, src + 1 / tk.fps, tk.fps, tk.w, tk.h, 1)[0]
+        frame = _media.frame_at(tk.path, src, tk.w, tk.h)
         dest = self.out.parent / f"still-{t:07.2f}.png"
         Image.fromarray(self.compose(self.base(), {}, shot, frame, t)).save(dest)
         return dest

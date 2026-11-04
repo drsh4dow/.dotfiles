@@ -34,14 +34,12 @@ import _media  # noqa: E402
 MODES = ("fixed", "zoom1.1", "shift8")
 
 
-def expected(src: Image.Image, mode: str, vw: int, vh: int) -> np.ndarray:
-    img = src
-    if mode == "zoom1.1":
-        w, h = src.size
-        cw, ch = w / 1.1, h / 1.1
-        img = src.crop(((w - cw) / 2, (h - ch) / 2, (w + cw) / 2, (h + ch) / 2))
-    view = np.asarray(img.resize((vw, vh), Image.LANCZOS).convert("RGB")).astype(np.int16)
-    return np.roll(view, 8, axis=1) if mode == "shift8" else view
+def expected(src: Image.Image, size: tuple) -> dict:
+    w, h = src.size
+    cw, ch = w / 1.1, h / 1.1
+    zoom = src.crop(((w - cw) / 2, (h - ch) / 2, (w + cw) / 2, (h + ch) / 2))
+    fixed, zoom = (np.asarray(i.resize(size, Image.LANCZOS).convert("RGB")).astype(np.int16) for i in (src, zoom))
+    return {"fixed": fixed, "zoom1.1": zoom, "shift8": np.roll(fixed, 8, axis=1)}
 
 
 def scale_errors(tl: _media.Timeline) -> list[str]:
@@ -60,21 +58,16 @@ def run(timeline: Path, video: Path | None, out: Path, per_second: int) -> tuple
     tl = _media.Timeline(timeline)
     video = video or tl.video
     step = max(1, round(tl.fps / per_second))
-    rows, fps_of = [], {}
-    for n, img in _media.decode(video, every=step):
-        t = n / tl.fps
-        shot = tl.shot_at(t)
-        vx, vy, vw, vh = shot["view"]
-        tw, th = shot["size"]
-        if shot["take"] not in fps_of:
-            fps_of[shot["take"]] = _media.probe(shot["take"])["fps"] or 30
-        got = img[vy:vy + vh, vx:vx + vw].astype(np.int16)
+
+    def sample(n, crop, shot, srcs):
+        got = crop.astype(np.int16)
         scores = {}
-        for src in _media.frames_near(shot["take"], tl.src_at(shot, t), fps_of[shot["take"]], tw, th):
-            for mode in MODES:
-                mad = float(np.abs(got - expected(src, mode, vw, vh)).mean())
-                scores[mode] = min(scores.get(mode, 1e9), mad)
-        rows.append({"frame": n, "t": round(t, 3), "take": Path(shot["take"]).name, **scores})
+        for src in srcs:
+            for mode, want in expected(Image.fromarray(src), tuple(shot["view"][2:])).items():
+                scores[mode] = min(scores.get(mode, 1e9), float(np.abs(got - want).mean()))
+        return {"frame": n, "t": round(n / tl.fps, 3), "take": Path(shot["take"]).name, **scores}
+
+    rows = _media.map_frames(tl, video, step, sample)
     errs = scale_errors(tl)
     beaten = [r for r in rows if r["fixed"] < min(r["zoom1.1"], r["shift8"])]
     worst = max(rows, key=lambda r: r["fixed"]) if rows else None
@@ -100,38 +93,48 @@ def self_test() -> int:
     with tempfile.TemporaryDirectory() as tmp:
         d = Path(tmp)
         tw, th, fps, secs = 320, 200, 30, 2.0
-        _media.synth_take(d / "take.mp4", tw, th, secs, fps)
+        pages = [_media.synth_page(tw, th, k / fps, fps) for k in range(int(secs * fps))]
+        # its second second sits 5 px left, so a stale frame from it reads as a pan once a shot goes back
+        _media.write_video(d / "take.mp4", pages[:fps] + [np.roll(p, -5, axis=1) for p in pages[fps:]], tw, th, fps)
         view = [40, 20, 480, 300]
         takes = [np.asarray(f[1]) for f in _media.decode(d / "take.mp4")]
 
-        def export(name, mode):
+        def export(name, mode, back=False):
             def frames():
                 for k in range(int(secs * fps)):
                     canvas = Image.new("RGB", (560, 360), (226, 232, 240))
-                    src = Image.fromarray(takes[min(k, len(takes) - 1)])
+                    src = Image.fromarray(takes[(k + fps) % len(takes) if back else min(k, len(takes) - 1)])
                     m = mode if k >= fps else "fixed"   # the second second goes wrong
-                    v = expected(src, {"zoom": "zoom1.1", "shift": "shift8"}.get(m, "fixed"), 480, 300)
-                    if m == "shift":
-                        v = np.roll(v, 4, axis=1)      # 12 px in all
+                    refs = expected(src, (480, 300))
+                    v = np.roll(refs["fixed"], 12, axis=1) if m == "pan12" else refs[m]
                     canvas.paste(Image.fromarray(v.astype(np.uint8)), (view[0], view[1]))
                     yield np.asarray(canvas)
             _media.write_video(d / f"{name}.mp4", frames(), 560, 360, fps)
             tl = {"video": str(d / f"{name}.mp4"), "fps": fps, "canvas": [560, 360], "total": secs,
                   "shots": [{"take": str(d / "take.mp4"), "size": [tw, th], "view": view, "out0": 0, "out1": secs,
-                             "pieces": [[0, secs, 0, secs]]}]}
+                             "pieces": [[0, 1, 1, secs], [1, secs, 0, 1]] if back else [[0, secs, 0, secs]]}]}
             (d / f"{name}.json").write_text(json.dumps(tl))
             return run(d / f"{name}.json", None, d / name, 4)[0]
 
         if not export("clean", "fixed"):
             fails.append("a whole-viewport export failed")
-        if export("zoomed", "zoom"):
+        if export("zoomed", "zoom1.1"):
             fails.append("an export zoomed 1.1x for one second passed")
-        if export("shifted", "shift"):
+        if export("panned", "pan12"):
             fails.append("an export panned 12 px for one second passed")
+        if not export("replayed", "fixed", back=True):
+            fails.append("a shot that goes back in its take failed")
         tl = _media.Timeline(d / "clean.json")
         tl.shots.append(dict(tl.shots[0], view=[40, 20, 400, 250]))
         if not scale_errors(tl):
             fails.append("two shots at different scales passed the scale witness")
+        _media.synth_take(d / "long.mp4", 160, 100, 60, 10)
+        shot = {"take": str(d / "long.mp4"), "size": [160, 100], "view": [0, 0, 160, 100], "out0": 0, "out1": 60,
+                "pieces": [[0, 60, 0, 60]]}
+        tl = {"video": shot["take"], "fps": 10, "canvas": [160, 100], "shots": [shot]}
+        (d / "long.json").write_text(json.dumps(tl))
+        if not run(d / "long.json", None, d / "long", 2)[0]:
+            fails.append("a 60 s export of its own take failed")
     print("framing.py self-test: " + ("PASS" if not fails else "FAIL\n  " + "\n  ".join(fails)))
     return 0 if not fails else 1
 

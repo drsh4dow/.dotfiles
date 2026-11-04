@@ -43,19 +43,26 @@ import _media  # noqa: E402
 DIFF, PAD, BLOCK, FOREIGN, INSET, TINT, FAINT_ALPHA = 48, 8, 16, 0.25, 8, 3.0, 26
 
 
-def changed(img, shot, t, tl, fps):
-    vx, vy, vw, vh = shot["view"]
-    tw, th = shot["size"]
-    got = img[vy:vy + vh, vx:vx + vw].astype(np.int16)
+def chmax(d: np.ndarray) -> np.ndarray:
+    """numpy's max(axis=2) over a 3-wide axis is about 15x slower than two np.maximum calls."""
+    a = np.abs(d)
+    return np.maximum(np.maximum(a[..., 0], a[..., 1]), a[..., 2])
+
+
+def changed(crop, srcs):
+    vh, vw = crop.shape[:2]
+    got = crop.astype(np.int16)
     best = signed = None
-    for src in _media.frames_near(shot["take"], tl.src_at(shot, t), fps, tw, th):
-        diff = got - np.asarray(src.resize((vw, vh), Image.LANCZOS).convert("RGB")).astype(np.int16)
-        dd = np.abs(diff).max(axis=2)
+    for src in srcs:
+        if src.shape[:2] != (vh, vw):
+            src = np.asarray(Image.fromarray(src).resize((vw, vh), Image.LANCZOS))
+        diff = got - src
+        dd = chmax(diff)
         if best is None:
             best, signed = dd, diff
         else:
-            m = dd < best
-            best, signed = np.where(m, dd, best), np.where(m[..., None], diff, signed)
+            np.copyto(signed, diff, where=(dd < best)[..., None])
+            best = np.minimum(dd, best)
     return best, signed
 
 
@@ -87,7 +94,7 @@ def interiors(marks, view):
     return res
 
 
-def median_shift(signed, mask):
+def median_shift(signed, mask=...):
     med = [float(np.median(signed[..., c][mask])) for c in range(3)]
     return med, max(abs(v) for v in med)
 
@@ -105,31 +112,28 @@ def run(timeline: Path, video: Path | None, out: Path, per_second: int):
     tl = _media.Timeline(timeline)
     video = video or tl.video
     step = max(1, round(tl.fps / per_second))
-    fps_of, rows, cards, fills, inside, floor = {}, [], [], [], [], []
-    for n, img in _media.decode(video, every=step):
+
+    def sample(n, crop, shot, srcs):
         t = n / tl.fps
-        shot = tl.shot_at(t)
-        if shot["take"] not in fps_of:
-            fps_of[shot["take"]] = _media.probe(shot["take"])["fps"] or 30
-        fps = fps_of[shot["take"]]
+        cards, inside, fills = [], [], []
         view = shot["view"]
-        vx, vy, vw, vh = view
+        vw, vh = view[2:]
         marks = tl.marks_at(t)
         allow = _media.view_mask(marks, view, PAD)
-        best, signed = changed(img, shot, t, tl, fps)
+        best, signed = changed(crop, srcs)
         fb = foreign(best > DIFF, allow)
-        rows.append({"frame": n, "t": round(t, 3), "marks": len(marks), "foreign_tiles": len(fb), "first": fb[:3]})
+        row = {"frame": n, "t": round(t, 3), "marks": len(marks), "foreign_tiles": len(fb), "first": fb[:3]}
         spot = card_spot(allow, vw, vh)
-        if spot:  # an opaque card where no mark is: the tile detector must see most of it
+        if spot:
             cx, cy, cw, chh = spot
-            take_px = img[vy:vy + vh, vx:vx + vw].astype(np.int16) - signed   # the best-matching take pixels
-            pasted = img[vy:vy + vh, vx:vx + vw].astype(np.int16).copy()
-            under = pasted[cy:cy + chh, cx:cx + cw].reshape(-1, 3).mean(axis=0)
-            pasted[cy:cy + chh, cx:cx + cw] = np.where(under > 127, 15, 240)   # contrasts with what it covers
-            dd = np.abs(pasted - take_px).max(axis=2)
+            card = (slice(cy, cy + chh), slice(cx, cx + cw))
+            under = crop[card].astype(np.int16)
+            best_take = under - signed[card]
+            dd = best.copy()
+            contrast_paint = np.where(under.reshape(-1, 3).mean(axis=0) > 127, 15, 240)
+            dd[card] = chmax(contrast_paint - best_take)
             hits = [b for b in foreign(dd > DIFF, allow) if cx <= b[0] < cx + cw and cy <= b[1] < cy + chh]
             cards.append({"frame": n, "caught_tiles": len(hits), "tiles": (cw // BLOCK) * (chh // BLOCK)})
-        floor.append(median_shift(signed, ~allow)[1])
         for mk, m in interiors(marks, view):
             if not m.sum():
                 continue
@@ -137,14 +141,19 @@ def run(timeline: Path, video: Path | None, out: Path, per_second: int):
             inside.append({"frame": n, "t": round(t, 3), "box": [round(v) for v in mk["box"]], "median_rgb": med,
                            "shift": worst, "tinted": worst > TINT})
             a = FAINT_ALPHA / 255
-            region = img[vy:vy + vh, vx:vx + vw].astype(np.float32)
+            region = crop[m].astype(np.float32)
             col = np.array(mk.get("color", [37, 99, 235]), np.float32)
-            delta = lambda c: (np.where(m[..., None], np.round(region * (1 - a) + c * a), region)  # noqa: E731
-                               .astype(np.int16) - region.astype(np.int16))
-            if median_shift(delta(col), m)[1] <= 2 * TINT:  # the page is the mark's colour there: test a contrasting fill
+            delta = lambda c: (np.round(region * (1 - a) + c * a).astype(np.int16)  # noqa: E731
+                               - region.astype(np.int16))
+            if median_shift(delta(col))[1] <= 2 * TINT:
                 col = 255 - col
             fills.append({"frame": n, "box": [round(v) for v in mk["box"]], "colour": col.tolist(),
-                          "shift": median_shift(signed + delta(col), m)[1]})
+                          "shift": median_shift(signed[m] + delta(col))[1]})
+        return row, median_shift(signed, ~allow)[1], cards, inside, fills
+
+    done = _media.map_frames(tl, video, step, sample)
+    rows, floor = [d[0] for d in done], [d[1] for d in done]
+    cards, inside, fills = ([r for d in done for r in d[k]] for k in (2, 3, 4))
     bad = [r for r in rows if r["foreign_tiles"]]
     blind_card = [c for c in cards if c["caught_tiles"] * 2 < c["tiles"]]
     tinted = [r for r in inside if r["tinted"]]

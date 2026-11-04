@@ -27,6 +27,8 @@ import functools
 import json
 import os
 import subprocess
+from collections import deque
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import numpy as np
@@ -124,14 +126,55 @@ def heard_words(audio: np.ndarray) -> list[dict]:
     return [{"w": w.word.strip(), "start": w.start, "end": w.end} for s in segs for w in s.words]
 
 
-def frames_near(path, t: float, fps: float, w: int, h: int, n: int = 3) -> list[Image.Image]:
-    """The take frames at t - 1/fps, t and t + 1/fps: a one-frame timing offset must not read as a mismatch."""
-    raw = subprocess.run(["ffmpeg", "-v", "error", "-ss", f"{max(0.0, t - 1 / fps):.4f}", "-i", str(path),
-                          "-frames:v", str(n), "-f", "rawvideo", "-pix_fmt", "rgb24", "-"],
-                         capture_output=True, check=True).stdout
-    size = w * h * 3
-    return [Image.frombuffer("RGB", (w, h), raw[i:i + size], "raw", "RGB", 0, 1)
-            for i in range(0, len(raw) - size + 1, size)]
+def frame_at(path, t: float, w: int, h: int) -> Image.Image:
+    """The first take frame at or after time t."""
+    raw = subprocess.run(["ffmpeg", "-v", "error", "-ss", f"{t:.4f}", "-i", str(path), "-frames:v", "1",
+                          "-f", "rawvideo", "-pix_fmt", "rgb24", "-"], capture_output=True, check=True).stdout
+    return Image.frombuffer("RGB", (w, h), raw, "raw", "RGB", 0, 1)
+
+
+@functools.cache
+def _clock(take) -> np.ndarray:
+    out = subprocess.run(["ffprobe", "-v", "error", "-select_streams", "v:0", "-show_entries", "packet=pts_time,flags",
+                          "-of", "csv=p=0", str(take)], capture_output=True, text=True, check=True).stdout
+    rows = [r.split(",") for r in out.split()]
+    pts = np.sort(np.array([r[0] for r in rows if "D" not in r[1]], float))
+    return pts - pts[0]
+
+
+def frame_before(clock: np.ndarray, t: float) -> int:
+    """The take frame before the one showing at time t. The 1 us slack absorbs pts_time's rounding to 6 decimals."""
+    showing = int(np.searchsorted(clock, t + 1e-6, "right")) - 1
+    return max(0, showing - 1)
+
+
+def map_frames(tl: Timeline, video, step: int, fn, threads: int = 4) -> list:
+    """fn(n, crop, shot, srcs) for every step-th export frame n, run on a pool of threads, results in frame order.
+    crop is the shot's view of the frame, and srcs are the read-only take-size frames near it."""
+    decoding, out, held = {}, [], deque()
+    ends = {s["take"]: s["out1"] for s in tl.shots}
+
+    def near(take, t):
+        clock = _clock(take)
+        k = frame_before(clock, t)
+        gen, last = decoding.get(take, (None, None))
+        if gen is None or last[0][0] > k:
+            gen, last = decode(take), deque(maxlen=3)
+        while not last or last[-1][0] < min(k + 2, len(clock) - 1):
+            last.append(next(gen))
+        decoding[take] = gen, last
+        return [f for i, f in last if i >= k]
+
+    with ThreadPoolExecutor(threads) as pool:
+        for n, img in decode(video, every=step):
+            shot = tl.shot_at(n / tl.fps)
+            decoding = {take: d for take, d in decoding.items() if ends[take] > n / tl.fps}
+            vx, vy, vw, vh = shot["view"]
+            srcs = near(shot["take"], tl.src_at(shot, n / tl.fps))
+            held.append(pool.submit(fn, n, img[vy:vy + vh, vx:vx + vw], shot, srcs))
+            if len(held) == threads:
+                out.append(held.popleft().result())
+    return out + [f.result() for f in held]
 
 
 class Timeline:
