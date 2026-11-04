@@ -2,7 +2,15 @@
   "$schema": "https://json.schemastore.org/claude-code-settings.json",
   "env": {
     "CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS": "40",
-    "TESTCONTAINERS_RYUK_DISABLED": "false"
+    "TESTCONTAINERS_RYUK_DISABLED": "false",
+    "CLAUDE_CODE_ENABLE_TELEMETRY": "1",
+    "OTEL_METRICS_EXPORTER": "otlp",
+    "OTEL_LOGS_EXPORTER": "otlp",
+    "OTEL_EXPORTER_OTLP_PROTOCOL": "http/protobuf",
+    "OTEL_EXPORTER_OTLP_METRICS_ENDPOINT": "https://otlp.datadoghq.com/v1/metrics",
+    "OTEL_EXPORTER_OTLP_LOGS_ENDPOINT": "https://otlp.datadoghq.com/v1/logs",
+    "OTEL_EXPORTER_OTLP_METRICS_TEMPORALITY_PREFERENCE": "delta",
+    "OTEL_RESOURCE_ATTRIBUTES": "deployment.environment=workstation,team=engineering"
   },
   "attribution": {
     "commit": "",
@@ -79,6 +87,7 @@
       "autoUpdate": true
     }
   },
+  "otelHeadersHelper": "/home/drsh4dow/.claude/bin/otel-headers-datadog.sh",
   "spinnerTipsEnabled": false,
   "modelSettings": {
     "claude-opus-5-5": {
@@ -90,6 +99,7 @@
   "tui": "fullscreen",
   "timeFormat": "24-hour",
   "autoMemoryEnabled": false,
+  "showThinkingSummaries": true,
   "skipDangerousModePermissionPrompt": true,
   "theme": "custom:catppuccin-mocha",
   "editorMode": "normal",
