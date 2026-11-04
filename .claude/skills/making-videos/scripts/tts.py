@@ -10,16 +10,15 @@
 narrate.py is the command; it imports synth and parse from here. A voice is PROVIDER:VOICE[:MODEL].
 gemini:Iapetus is Gemini's prebuilt voice Iapetus on gemini-3.8-flash-tts; eleven:Mark is ElevenLabs voice
 UgBBYS2sOqTuMpoF3BR0 on eleven_v4. Any other Gemini voice name or ElevenLabs voice id works too. Gemini takes a
-speaking-style prompt (default STYLE below). ElevenLabs takes no prompt; its pace is a speed after the voice,
-eleven:Mark@0.8 (0.8 to 1.2, default ELEVEN_SPEED, which puts Mark near 165 words a minute). Slow a voice this way,
-never by stretching its audio.
+speaking-style prompt (default STYLE below). ElevenLabs takes no prompt, and eleven_v4 ignores any speed setting, so
+Mark speaks at his own pace, about 185 to 205 words a minute. Never stretch a voice's audio to slow it.
 ElevenLabs returns character times. Gemini returns none, so local faster-whisper (WHISPER_MODEL, default
 small.en) hears the clip and its words are matched to the line by letters; a clip that does not say the line is
 voiced again, up to 3 tries in all. Either way each word's start and end then snap to the audible audio (10 ms frames
 above -35 dBFS), never spread by character count, on every read, so a cached line takes the current snap. A word
 whose recognized span holds a pause (PAUSE s or more of quiet) starts after it: the sound before it is the previous
 word's tail.
-Each line is cached under DIR as <sha256(text, provider, model, voice, style, speed)[:20]>.{wav,json}, so a rerun
+Each line is cached under DIR as <sha256(text, provider, model, voice, style)[:20]>.{wav,json}, so a rerun
 calls the API only for lines whose text or voice changed. offline=True turns a cache miss into an error, so a
 rebuild can never re-voice by accident. GEMINI_API_KEY and ELEVENLABS_API_KEY travel only in request headers, are
 never printed or written, and never follow a redirect. A 3xx or a 4xx other than 429 fails the provider at once. A
@@ -59,7 +58,6 @@ import _media  # noqa: E402
 
 SR, HOP, LOUD_DB, PAUSE, MAX_WAIT, MIN_HEARD, BACKOFF = 48000, 0.01, -35.0, 0.15, 300, 0.7, 2.0
 MODELS = {"gemini": "gemini-3.8-flash-tts", "eleven": "eleven_v4"}
-ELEVEN_SPEED = 0.85
 ELEVEN_NAMES = {"Mark": "UgBBYS2sOqTuMpoF3BR0"}
 STYLE = "a calm, plain-spoken colleague narrating an internal product walkthrough, steady pace"
 API = {"gemini": ("https://generativelanguage.googleapis.com", "GEMINI_API_KEY", "x-goog-api-key"),
@@ -77,26 +75,16 @@ class Voice(NamedTuple):
     model: str
     voice: str
     style: str
-    speed: float | None
 
 
 def parse(spec: str, style: str = STYLE) -> Voice:
     provider, _, rest = spec.partition(":")
     voice, _, model = rest.partition(":")
-    voice, at, speed = voice.partition("@")
-    if provider not in MODELS or not voice:
+    if provider not in MODELS or not voice or "@" in voice:
         raise SystemExit(f"tts.py: voice {spec!r} is not PROVIDER:VOICE[:MODEL] with PROVIDER gemini or eleven")
     if provider == "gemini":
-        if at:
-            raise SystemExit(f"tts.py: {spec!r}: Gemini takes no speed; slow it with --style")
-        return Voice(provider, model or MODELS[provider], voice, style, None)
-    try:
-        speed = float(speed) if at else ELEVEN_SPEED
-    except ValueError:
-        speed = None
-    if speed is None or not 0.8 <= speed <= 1.2:
-        raise SystemExit(f"tts.py: {spec!r}: an ElevenLabs speed is a number from 0.8 to 1.2")
-    return Voice(provider, model or MODELS[provider], ELEVEN_NAMES.get(voice, voice), "", speed)
+        return Voice(provider, model or MODELS[provider], voice, style)
+    return Voice(provider, model or MODELS[provider], ELEVEN_NAMES.get(voice, voice), "")
 
 
 class _NoRedirect(urllib.request.HTTPRedirectHandler):
@@ -152,7 +140,7 @@ def _gemini(text: str, v: Voice) -> tuple[bytes, list[str]]:
 
 def _eleven(text: str, v: Voice) -> tuple[bytes, list[tuple]]:
     d = _post("eleven", f"/v1/text-to-speech/{v.voice}/with-timestamps?output_format=pcm_24000",
-              {"text": text, "model_id": v.model, "voice_settings": {"speed": v.speed}})
+              {"text": text, "model_id": v.model})
     al = d.get("alignment") or {}
     words, cur = [], None
     for c, s, e in zip(al.get("characters") or [], al.get("character_start_times_seconds") or [],
@@ -342,15 +330,11 @@ def self_test() -> int:
             b = synth("Three synthetic words.", d, mark)
             path, headers, body = hits[-1]
             if "/v1/text-to-speech/UgBBYS2sOqTuMpoF3BR0/with-timestamps" not in path or body["model_id"] != "eleven_v4" \
-                    or body.get("voice_settings") != {"speed": 0.85} or headers.get("xi-api-key") != secret:
+                    or "voice_settings" in body or headers.get("xi-api-key") != secret:
                 fails.append(f"ElevenLabs request {path} {body}")
             if [w["w"] for w in b["words"]] != ["Three", "synthetic", "words."] or abs(b["duration"] - 1.0) > 1e-3:
                 fails.append(f"ElevenLabs words {b['words']}")
-            n = len(hits)
-            synth("Three synthetic words.", d, parse("eleven:Mark@0.8"))
-            if len(hits) != n + 1 or hits[-1][2]["voice_settings"] != {"speed": 0.8}:
-                fails.append(f"eleven:Mark@0.8 was not voiced again at speed 0.8: {hits[-1][2]}")
-            for spec in ("eleven:Mark@0.5", "eleven:Mark@fast", "eleven:Mark@", "gemini:Iapetus@0.8"):
+            for spec in ("eleven:Mark@0.8", "eleven:", "gemini:Iapetus@0.8"):
                 if not raises(lambda: parse(spec), SystemExit):
                     fails.append(f"the voice {spec} passed")
             for patch in ({"alignment": None}, {"audio_base64": None}):
