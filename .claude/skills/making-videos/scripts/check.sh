@@ -1,14 +1,18 @@
 #!/usr/bin/env bash
-# Audio and picture checks on an exported video, against the user's limits. No flag loosens them.
+# Every scripted check on an exported video, in parallel, against the user's limits. No flag loosens them.
 #
-#   check.sh VIDEO.mp4 [--profile narrated|captions] [--timeline T.json] [--voice VOICE.wav] [--area W:H:X:Y] [--out DIR]
+#   check.sh VIDEO.mp4 [--profile narrated|captions] [--timeline T.json] [--voice VOICE.wav] [--area W:H:X:Y]
+#            [--caption-box X,Y,W,H] [--since EARLIER.mp4 [--allow T0-T1]...] [--out DIR]
 #   check.sh --self-test
 #
 # Profiles: narrated (the default) runs every check, and fails a video with no audio stream. captions, for a
 # captions-only clip with no voice, reports dead air, quiet gaps and loudness as not applicable, because its
-# holds are frozen and silent by design. Caption holds and sync are sync.py's.
+# holds are frozen and silent by design. The profile and --voice pass on to sync.py.
 # --timeline is a recorded cut's timeline.json or a composed film's voice.json: its lines are the narration.
-# Writes to DIR (default checks/ beside VIDEO) ffprobe.json and checks.txt:
+# A recorded cut (a timeline with shots) also runs sync.py, framing.py and overlays.py on VIDEO; a composed film
+# runs sync.py when --caption-box names its burned caption band.
+# Writes to DIR (default checks/ beside VIDEO) verdict.txt, whose first line is "sha256 HASH VIDEO", then one line per check
+# with its status and, when it ran, its detail file in DIR. checks.txt holds:
 # - dead air: a span over 1.0 s where the picture is frozen (freezedetect -50 dB) and the sound silent
 #   (silencedetect -35 dB) at once;
 # - quiet gaps, when a timeline names the narration lines: a quiet span (-35 dB, >= 0.1 s) between lines over
@@ -20,8 +24,13 @@
 #   brightness over the picture area (--area, ffmpeg crop syntax, default the whole frame) is more than 25%
 #   below the brightest frame both in the 1 s before it and in the 1 s after it. A fade through black dips, and
 #   so do an outgoing fade and a late incoming fade that leave the background showing between them. A
-#   cross-dissolve does not. A recorded cut is not applicable: a real dialog backdrop dims the page;
-# - contact sheets of frames picked by index every 2 s (frames.py).
+#   cross-dissolve does not. A recorded cut is not applicable: a real dialog backdrop dims the page.
+# --since proves a re-cut changed only what it meant to, for the re-watch. It is PASS when its decoded audio and its
+# subtitle track match EARLIER's and framediff.py finds no changed frame outside the --allow spans (seconds),
+# LOOK otherwise, which means the watchers watch the whole export.
+# The privacy pass reads one frame a second into ocr.txt, picked by index, upscaled 2x to grey, read by tesseract
+# --psm 11. Each distinct line with @, mail or .com is a hit, with its first and last time and first frame.
+# Hits are LOOK, not FAIL, so compare each by eye with the identities allowed on screen.
 # Exit 1 when an applicable check fails, 0 otherwise.
 set -euo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
@@ -33,11 +42,15 @@ self_test() {
   expect() {
     local want="$1" msg="$2" got=0
     shift 2
-    "$0" "$@" > "$d/last.txt" 2>&1 || got=$?
+    "$d/bin/check.sh" "$@" > "$d/last.txt" 2>&1 || got=$?
     [ "$got" = "$want" ] || { echo "  $msg: exit $got, want $want"; rc=1; }
   }
   says() { grep -qE "$1" "$d/last.txt" || { echo "  $2: no line matches '$1'"; rc=1; }; }
-  local enc=(-c:v libx264 -pix_fmt yuv420p) src=(-f lavfi -i testsrc2=s=320x200:r=30:d=4)
+  mkdir "$d/bin" && cp "$0" "$d/bin/check.sh" && ln -s "$HERE/framediff.py" "$HERE/_media.py" "$d/bin/"
+  for s in sync framing overlays; do printf '#!/bin/sh\necho "%s.py $*" >> "%s/calls"\n' "$s" "$d" > "$d/bin/$s.py"; done
+  echo 'case "$1" in *misframed*) exit 1; esac' >> "$d/bin/framing.py"
+  chmod +x "$d"/bin/{sync,framing,overlays}.py
+  local enc=(-c:v libx264 -pix_fmt yuv420p) lossless=(-qp 0) src=(-f lavfi -i testsrc2=s=320x200:r=30:d=4)
   tone() { ffmpeg -v error -f lavfi -i "sine=f=330:d=4,volume='$1':eval=frame" -ar 48000 "$d/$2"; }
   tone 1.95 tone.wav                                    # -16 LUFS
   tone "if(between(t,1.5,2.5),0,1.95)" gap.wav          # a 1 s pause at 1.5 s
@@ -62,9 +75,24 @@ self_test() {
   printf '{"lines":[{"text":"a","start":0.1,"end":1.5},{"text":"b","start":2.5,"end":3.9}]}' > "$d/two.json"
   printf '{"lines":[{"text":"a","start":0.1,"end":3.9}]}' > "$d/one.json"
   printf '{"lines":[{"text":"a","start":0.1,"end":1.5},{"text":"b","start":2.5,"end":3.9}],"voice":"%s"}' "$d/gap.wav" > "$d/voiced.json"
-  printf '{"shots":[{"take":"t.mp4"}],"lines":[]}' > "$d/recorded.json"
+  printf '{"lines":[{"text":"a","start":0.1,"end":1.5},{"text":"b","start":2.5,"end":3.9}],"voice":"gemini:Iapetus"}' > "$d/named.json"
+  printf '{"shots":[{"take":"t.mp4"}],"lines":[]}' | tee "$d/recorded.json" > "$d/misframed.json"
+  ffmpeg -v error -i "$d/tone.mp4" -vf "drawtext=fontfile=$HERE/../fonts/Inter-Regular.ttf:text=cal@example.com:fontsize=28:fontcolor=black:box=1:boxcolor=white:x=20:y=80:enable='between(t,1.9,2.5)'" \
+    "${enc[@]}" "${lossless[@]}" -c:a copy "$d/email.mp4"
   expect 0 "moving picture with steady sound failed" "$d/tone.mp4" --out "$d/c"
-  ls "$d"/c/sheet-*.jpg > /dev/null 2>&1 || { echo "  no contact sheet written"; rc=1; }
+  says "^sha256 $(sha256sum "$d/tone.mp4" | cut -d' ' -f1) " "verdict.txt's first line is not the export's sha256"
+  says "^PASS checks: checks.txt" "the passing export's own checks"
+  says "^n/a  framing" "framing.py ran with no recorded cut"
+  says "^PASS privacy OCR" "OCR read @, mail or .com in a test pattern"
+  expect 0 "an email on screen failed the export" "$d/email.mp4" --out "$d/c"
+  says "^LOOK privacy OCR: hits 1," "the email on screen at 2 s"
+  grep -q "^2.00-2.00 s, frame 60: .*cal@example" "$d/c/ocr.txt" || { echo "  ocr.txt does not give the email's time and text"; rc=1; }
+  expect 0 "a re-cut that adds an email outside its span failed" "$d/email.mp4" --since "$d/tone.mp4" --allow 3-4 --out "$d/c"
+  says "^LOOK re-watch" "an email added outside the --allow span"
+  expect 0 "a re-cut that changes only its span failed" "$d/email.mp4" --since "$d/tone.mp4" --allow 1.8-2.6 --out "$d/c"
+  says "^PASS re-watch: same audio and subtitles as $(sha256sum "$d/tone.mp4" | cut -c1-64)" "a re-cut inside its span"
+  expect 0 "a re-cut with a new voice failed" "$d/tone.mp4" --since "$d/quiet.mp4" --out "$d/c"
+  says "^LOOK re-watch: the audio differs" "a re-cut with a new voice"
   expect 1 "2 s of frozen, silent video passed" "$d/dead.mp4" --out "$d/c"
   says "dead air .*: FAIL, 1" "the frozen, silent span"
   says "loudness: PASS" "the dead-air clip failed loudness too"
@@ -94,32 +122,79 @@ self_test() {
   expect 0 "a 20% dip failed" "$d/dip0.8.mp4" --profile captions --area iw:ih:0:0 --out "$d/c"
   expect 0 "a recorded cut's fade failed the dip check" "$d/fadeblack.mp4" --profile captions --timeline "$d/recorded.json" --out "$d/c"
   says "dark dips: not applicable" "a recorded cut's dips"
+  says "^PASS overlays: overlays.log" "a recorded cut's overlays"
+  grep -q "^sync.py $d/recorded.json --video $d/fadeblack.mp4 --profile captions --out" "$d/calls" ||
+    { echo "  sync.py did not get the timeline, export and profile: $(cat "$d/calls")"; rc=1; }
+  expect 1 "a recorded cut whose framing fails passed" "$d/fadeblack.mp4" --profile captions --timeline "$d/misframed.json" --out "$d/c"
+  says "^FAIL framing: framing.log" "the framing failure"
+  expect 0 "a composed film with a caption band failed" "$d/tone.mp4" --timeline "$d/two.json" --caption-box 0,0,320,40 --out "$d/c"
+  says "^n/a  overlays" "overlays.py ran on a composed film"
+  expect 0 "a composed film whose voice.json names its voice failed" "$d/tone.mp4" --timeline "$d/named.json" --out "$d/c"
+  grep -q "^sync.py $d/two.json --video $d/tone.mp4 --profile narrated --caption-box 0,0,320,40 --out" "$d/calls" ||
+    { echo "  sync.py did not get the composed film's caption band: $(cat "$d/calls")"; rc=1; }
   [ "$rc" = 0 ] && echo "check.sh self-test: PASS" || echo "check.sh self-test: FAIL"
   return "$rc"
 }
 
 case "${1:-}" in
-  ""|-h|--help) sed -n '2,25p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+  ""|-h|--help) sed '1d;/^[^#]/,$d;s/^# \{0,1\}//' "$0"; exit 0 ;;
   --self-test) self_test; exit $? ;;
 esac
 
 V="$(realpath "$1")"; shift
-T="" VOICE="" OUT="" PROFILE=narrated AREA=""
+T="" VOICE="" OUT="" PROFILE=narrated AREA="" BOX="" SINCE="" ALLOW=()
 while [ $# -gt 0 ]; do
   case "$1" in
     --profile) PROFILE="$2"; shift 2 ;;
     --timeline) T="$(realpath "$2")"; shift 2 ;;
     --voice) VOICE="$(realpath "$2")"; shift 2 ;;
     --area) AREA="$2"; shift 2 ;;
+    --caption-box) BOX="$2"; shift 2 ;;
+    --since) SINCE="$(realpath "$2")"; shift 2 ;;
+    --allow) ALLOW+=(--allow "$2"); shift 2 ;;
     --out) OUT="$2"; shift 2 ;;
     *) echo "check.sh: unknown argument $1" >&2; exit 2 ;;
   esac
 done
 case "$PROFILE" in narrated|captions) ;; *) echo "check.sh: --profile is narrated or captions, not $PROFILE" >&2; exit 2 ;; esac
-[ -n "$VOICE" ] || [ -z "$T" ] || VOICE="$(jq -r '.voice // empty' "$T")"
+[ -n "$VOICE" ] || [ -z "$T" ] || { x="$(jq -r '.voice // empty' "$T")"; [ ! -f "$x" ] || VOICE="$x"; }  # a voice.json names a voice, not a file
 C="${OUT:-$(dirname "$V")/checks}"
 mkdir -p "$C"
-rm -f "$C"/silencedetect*.log "$C"/ebur128.log
+rm -f "$C"/silencedetect*.log "$C"/ebur128.log "$C"/verdict.txt "$C"/{sync,framing,overlays,rewatch}.{md,json,log} "$C"/{ocr,checks}.txt
+SHA="$(sha256sum "$V" | cut -d' ' -f1)"
+declare -A JOB
+start() { local n="$1"; shift; "$@" > "$C/$n.log" 2>&1 & JOB[$n]=$!; }
+ocr() {
+  local fps step d="$C/ocr"
+  fps="$(ffprobe -v error -select_streams v:0 -show_entries stream=r_frame_rate -of csv=p=0 "$V")"
+  step="$(awk -F/ '{print int($1 / $2 + 0.5)}' <<< "$fps")"
+  rm -rf "$d" && mkdir "$d"
+  ffmpeg -v error -i "$V" -map 0:v:0 -fps_mode passthrough -vf "select='not(mod(n,$step))',scale=2*iw:2*ih,format=gray" \
+    -start_number 0 "$d/%06d.png"
+  find "$d" -name '*.png' | OMP_THREAD_LIMIT=1 xargs -P 4 -I{} tesseract {} {} --psm 11
+  awk -v step="$step" -v fps="$fps" 'BEGIN { split(fps, q, "/") }
+    tolower($0) ~ /@|mail|\.com/ { n = FILENAME; sub(/.*\//, "", n); n = int(n) * step
+      sub(/^ +/, ""); sub(/ +$/, ""); if (!($0 in first)) first[$0] = n; last[$0] = n }
+    END { for (k in first) printf "%.2f-%.2f s, frame %d: %s\n", first[k] * q[2] / q[1], last[k] * q[2] / q[1], first[k], k }' \
+    "$d"/*.txt | sort -n > "$C/ocr.txt"
+  rm -rf "$d"
+}
+same() { [ "$(ffmpeg -v error -i "$SINCE" -map "0:$1?" -f "$2" - 2> /dev/null | sha256sum)" = \
+           "$(ffmpeg -v error -i "$V" -map "0:$1?" -f "$2" - 2> /dev/null | sha256sum)" ]; }
+rewatch() {
+  same a s16le || { echo "the audio differs"; return 1; }
+  same s srt || { echo "the subtitles differ"; return 1; }
+  "$HERE/framediff.py" "$SINCE" "$V" "${ALLOW[@]}"
+}
+[ -z "$SINCE" ] || start rewatch rewatch
+SHOTS=0
+[ -n "$T" ] && jq -e '.shots | length > 0' "$T" > /dev/null && SHOTS=1
+if [ "$SHOTS" = 1 ] || { [ -n "$T" ] && [ -n "$BOX" ]; }; then
+  start sync "$HERE/sync.py" "$T" --video "$V" --profile "$PROFILE" ${VOICE:+--voice "$VOICE"} \
+    ${BOX:+--caption-box "$BOX"} --out "$C"
+fi
+[ "$SHOTS" = 0 ] || { start framing "$HERE/framing.py" "$T" --video "$V" --out "$C"; start overlays "$HERE/overlays.py" "$T" --video "$V" --out "$C"; }
+start ocr ocr
 ffprobe -v error -show_entries format=duration,size,bit_rate:stream=codec_type,codec_name,width,height,r_frame_rate,sample_rate,channels -of json "$V" > "$C/ffprobe.json"
 ffmpeg -hide_banner -nostats -i "$V" -map 0:v -fps_mode passthrough -f null \
   -vf "freezedetect=n=-50dB:d=1.0,crop=${AREA:-iw:ih:0:0},signalstats,metadata=print:key=lavfi.signalstats.YAVG" - 2> "$C/picture.log"
@@ -224,7 +299,20 @@ sys.exit(1 if bad else 0)
 EOF
 rc=$?
 set -e
-rm -f "$C"/sheet-*.jpg
-"$HERE/frames.py" "$V" --out "$C" --every 2 > /dev/null
-echo "contact sheets: $(ls "$C"/sheet-*.jpg | wc -l) in $C"
+{
+  echo "sha256 $SHA $V"
+  [ "$rc" = 0 ] && echo "PASS checks: checks.txt" || echo "FAIL checks: checks.txt"
+  for n in sync framing overlays; do
+    if [ -z "${JOB[$n]:-}" ]; then echo "n/a  $n: no --timeline with shots$([ "$n" != sync ] || echo ", or --timeline with --caption-box")"
+    elif wait "${JOB[$n]}"; then echo "PASS $n: $n.log"
+    else echo "FAIL $n: $n.log"; rc=1; fi
+  done
+  if ! wait "${JOB[ocr]}"; then echo "FAIL privacy OCR: ocr.log"; rc=1
+  elif [ -s "$C/ocr.txt" ]; then echo "LOOK privacy OCR: hits $(wc -l < "$C/ocr.txt"), compare each with the identities allowed on screen: ocr.txt"
+  else echo "PASS privacy OCR: no @, mail or .com read: ocr.txt"; fi
+  if [ -z "$SINCE" ]; then :
+  elif wait "${JOB[rewatch]}"; then echo "PASS re-watch: same audio and subtitles as $(sha256sum < "$SINCE" | cut -c1-64), no frame changed${ALLOW[*]:+ outside ${ALLOW[*]}}: rewatch.log"
+  else echo "LOOK re-watch: $(head -1 "$C/rewatch.log"), so watch the whole export: rewatch.log"; fi
+} > "$C/verdict.txt"
+cat "$C/verdict.txt"
 exit "$rc"

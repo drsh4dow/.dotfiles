@@ -38,8 +38,8 @@ Copy these into your todo list. Each ends on its done-when.
    Done when you have looked at full-size frames of every take or scene yourself, and each logged click or tap lands on the frame where the UI reacts, measured on the take's clock.
 5. **One chapter first.** Cut one chapter in its final framing, give the user its path, open it, and wait for a yes. If the user told you to run without stopping, log that you skipped the wait and show the chapter at handoff. Done on the user's yes or the logged skip.
 6. **Cut and mix.** Per [references/cut-and-mix.md](references/cut-and-mix.md). Done when the export exists and you know its sha256.
-7. **Check the export.** Run every check in [references/checks.md](references/checks.md) that applies to this video's profile. Done when each passes on the exported file.
-8. **Watch.** Brief a fresh subagent from [references/watcher-brief.md](references/watcher-brief.md) for each new sha256. Fix its blockers and should-fixes, re-export, and send the new file to a new watcher. Stop at a ready verdict or after three rounds, and report what is left.
+7. **Check the export.** Run `scripts/check.sh` once per export, per [references/checks.md](references/checks.md). Done when `checks/verdict.txt` has no FAIL line and you have looked by eye at each LOOK hit and at what no script covers.
+8. **Watch.** Brief a fresh subagent from [references/watcher-brief.md](references/watcher-brief.md) for each new sha256. Fix its blockers and should-fixes, re-export, run step 7 on the new export, and only then send it to a new watcher. Stop at a ready verdict or after three rounds, and report what is left.
 9. **Hand off.** Done when the user has the path and the file is open.
 
 ## Handoff
@@ -58,7 +58,7 @@ Copy these into your todo list. Each ends on its done-when.
 
 ## Scripts
 
-All in `scripts/`. Each prints `--help`, takes parameters, and has a self-test; `scripts/self-test` runs them all. Run each as an executable so its `uv run --script` shebang installs what it declares. They need ffmpeg, uv, jq, Node 22+ and Chromium; web capture also needs Xvfb, xdotool and agent-browser.
+All in `scripts/`. Each prints `--help`, takes parameters, and has a self-test; `scripts/self-test` runs them all. Run each as an executable so its `uv run --script` shebang installs what it declares. They need ffmpeg, uv, jq, tesseract, Node 22+ and Chromium; web capture also needs Xvfb, xdotool and agent-browser.
 
 | Script | Block |
 | --- | --- |
@@ -66,7 +66,7 @@ All in `scripts/`. Each prints `--help`, takes parameters, and has a self-test; 
 | `window.py`, `drive.py`, `cdp.mjs`, `mask.js` | web capture: full window on Xvfb, human input, events log, privacy mask |
 | `cut.py` | cut takes from `EDIT.json`: one scale, rings, outlines, captions, chips, voice |
 | `mix.sh`, `music.sh` | voice plus an optional music bed, ducked, to -16 LUFS |
-| `check.sh`, `sync.py`, `framing.py`, `overlays.py`, `framediff.py` | checks on the export |
-| `frames.py` | frames by index for your eyes and the watcher's |
+| `check.sh` (runs `sync.py`, `framing.py`, `overlays.py`, `framediff.py`) | checks on the export |
+| `frames.py` | frames by index for your eyes and the watchers' |
 
 `templates/remotion/` is the starter for composed films.

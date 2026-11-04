@@ -6,7 +6,7 @@
 """Caption checks on the exported mp4: how long each caption stays on screen (holds), and when it appears
 against the moment the voice says its first word, heard by a local speech recognizer (sync).
 
-    HF_HUB_OFFLINE=1 sync.py TIMELINE.json [--profile narrated|captions] [--video V.mp4] [--voice VOICE.wav] [--out DIR]
+    sync.py TIMELINE.json [--profile narrated|captions] [--video V.mp4] [--voice VOICE.wav] [--out DIR]
     sync.py VIDEO.mp4 [same options]                                  # soft subtitles: the export's own cues
     sync.py voice.json --video V.mp4 --caption-box X,Y,W,H [same options]   # a composed film, captions burned in
     sync.py --self-test
@@ -42,6 +42,7 @@ from __future__ import annotations
 
 import difflib
 import json
+import os
 import re
 import subprocess
 import sys
@@ -53,6 +54,8 @@ from PIL import Image, ImageDraw
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import _media  # noqa: E402
+
+os.environ.setdefault("HF_HUB_OFFLINE", "1")
 
 BLK, EVENT, BLANK_MAX, WINDOW, SR = 8, 8.0, 16.0, 1.0, 16000
 LIMIT, HOLD_BASE, PER_WORD, MEASURED, VOICE_MATCH = 0.3, 1.5, 0.3, 0.8, 0.7  # the user's rules; no flag loosens them

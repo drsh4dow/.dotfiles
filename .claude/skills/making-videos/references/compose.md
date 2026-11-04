@@ -24,7 +24,7 @@ The user's favourite is 3Blue1Brown with code aesthetics. Offer the look as its 
 ## Real footage and terminals
 
 - Footage goes in as H.264 with no audio, scaled to the size it plays at, through `<OffthreadVideo muted>`. Pin each source's sha256.
-- Mask on full-size frames before scaling, with an opaque box in the surrounding colour, never a blur. A real email once sat in every sidebar frame of a source clip. Prove every mask box is flat on every frame, and OCR the film.
+- Mask on full-size frames before scaling, with an opaque box in the surrounding colour, never a blur. A real email once sat in every sidebar frame of a source clip. Prove every mask box is flat on every frame.
 - A terminal tutorial shows real output. Run each command, save its output, and type it through the `Terminal` part verbatim. Type commands at a human pace and hold each result long enough to read.
 
 ## Helpers
