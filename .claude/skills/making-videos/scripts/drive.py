@@ -32,8 +32,9 @@ A take cued to the voice fires each action on its word, by cut.py's "Timing a ta
     t.take_t(voice_t)       the take second a voice time lands on, counting the jump cuts so far, so call it where
                             the action is; it gives an outline's "src" in EDIT.json
     move, hover, click      with on=voice_t, the pointer arrives or the button goes down then; hover and click look
-                            up the box LOOKUP_S before the word, so a slow lookup is not late. on= is for pointer
-                            actions; t.at(voice_t) cues everything else
+                            up the box LOOKUP_S before the word, so a slow lookup is not late. They aim at the
+                            element's text, or its box when it has none. on= is for pointer actions;
+                            t.at(voice_t) cues everything else
     mark_box(label, *js)    one box around all the elements
     wait_until(jump_cut=True)   a wait the shot jump-cuts, so later cued actions fire that much later in the take
 
@@ -211,14 +212,19 @@ class Take:
     def aim(self, js_expr: str, fx: float, fy: float, on: float | None) -> tuple[dict, float, float]:
         if on is not None:
             time.sleep(max(0.0, self.take_t(on) - LOOKUP_S - self.now()))
-        b = self.box(js_expr)
+        b = self.box(js_expr, text=True)
         return b, b["x"] + b["w"] * fx, b["y"] + b["h"] * fy
 
     # ---- geometry -------------------------------------------------------
-    def box(self, js_expr: str) -> dict:
-        """js_expr evaluates to an Element; returns its viewport box in CSS px."""
-        b = self.js(f"(()=>{{const e=({js_expr}); if(!e) return null; const r=e.getBoundingClientRect();"
-                    f"return JSON.stringify({{x:r.x,y:r.y,w:r.width,h:r.height}})}})()")
+    def box(self, js_expr: str, text: bool = False) -> dict:
+        """js_expr evaluates to an Element; returns its viewport box in CSS px. With text=True it returns the part
+        of that box its text covers, or the whole box when its text covers none of it."""
+        g = ("const o=e.getBoundingClientRect(), g=document.createRange(); g.selectNodeContents(e);"
+             "const t=g.getBoundingClientRect(), x=Math.max(t.left,o.left), y=Math.max(t.top,o.top),"
+             "w=Math.min(t.right,o.right)-x, h=Math.min(t.bottom,o.bottom)-y;"
+             "const r=w>0&&h>0?{x,y,width:w,height:h}:o;") if text else "const r=e.getBoundingClientRect();"
+        b = self.js(f"((e)=>{{if(!e) return null; {g}return JSON.stringify({{x:r.x,y:r.y,w:r.width,h:r.height}})}})"
+                    f"({js_expr})")
         if not b:
             raise RuntimeError(f"no element for {js_expr[:80]}")
         return b

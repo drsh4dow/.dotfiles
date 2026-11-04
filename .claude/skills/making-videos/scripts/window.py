@@ -141,8 +141,8 @@ class WindowTake(Take):
     def x(self, *args: str) -> str:
         return xdo(self.display, *args)
 
-    def box(self, js_expr: str) -> dict:
-        b = {k: v * self.scale for k, v in super().box(js_expr).items()}
+    def box(self, js_expr: str, text: bool = False) -> dict:
+        b = {k: v * self.scale for k, v in super().box(js_expr, text).items()}
         return {**b, "x": b["x"] + self.offset[0], "y": b["y"] + self.offset[1]}
 
     def start(self) -> None:
