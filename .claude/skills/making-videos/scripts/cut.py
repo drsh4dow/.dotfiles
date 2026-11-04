@@ -391,7 +391,7 @@ class Cut:
             shot = self.shots[si]
             src = _media.Timeline.src_at(shot, t)
             if dec is None or not dec.can(src):
-                dec = Decoder(shot["_tk"], src)
+                dec = Decoder(shot["_tk"], src, self.fps)
             yield self.compose(base, cache, shot, dec.get(src), t)
 
     # ------------------------------------------------------------------ audio, docs
@@ -432,26 +432,29 @@ class Cut:
         shot = next((s for s in self.shots if t < s["out1"]), self.shots[-1])
         src = _media.Timeline.src_at(shot, t)
         tk = shot["_tk"]
-        frame = _media.frame_at(tk.path, src, tk.w, tk.h)
+        frame = Decoder(tk, src, self.fps).get(src)
         dest = self.out.parent / f"still-{t:07.2f}.png"
         Image.fromarray(self.compose(self.base(), {}, shot, frame, t)).save(dest)
         return dest
 
 
 class Decoder:
-    """Sequential take decoder; restarts when a piece jumps backwards in take time."""
+    """Sequential take decoder on the cut's frame grid; restarts when a piece jumps backwards in take time."""
 
-    def __init__(self, tk: Take, start: float):
-        self.tk, self.start, self.idx, self.frame = tk, start, -1, None
+    def __init__(self, tk: Take, start: float, fps: int):
+        self.tk, self.start, self.fps, self.idx, self.frame = tk, start, fps, -1, None
         self.size = tk.w * tk.h * 3
-        self.proc = subprocess.Popen(["ffmpeg", "-v", "error", "-ss", f"{start:.3f}", "-i", str(tk.path), "-f", "rawvideo",
-                                      "-pix_fmt", "rgb24", "-"], stdout=subprocess.PIPE)
+        # fps= gives each tick the last take frame whose timestamp rounds to that tick or earlier, so a take that
+        # dropped frames under load stays on its clock. Without accurate seek the filter also sees the frame showing at start.
+        self.proc = subprocess.Popen(["ffmpeg", "-v", "error", "-noaccurate_seek", "-ss", f"{start:.3f}", "-i", str(tk.path),
+                                      "-vf", f"fps={fps}:start_time=0", "-f", "rawvideo", "-pix_fmt", "rgb24", "-"],
+                                     stdout=subprocess.PIPE)
 
     def can(self, src: float) -> bool:
-        return round((src - self.start) * self.tk.fps) >= self.idx
+        return round((src - self.start) * self.fps) >= self.idx
 
     def get(self, src: float) -> Image.Image:
-        want = max(0, round((src - self.start) * self.tk.fps))
+        want = max(0, round((src - self.start) * self.fps))
         while self.idx < want:
             buf = self.proc.stdout.read(self.size)
             if len(buf) < self.size:
@@ -488,7 +491,11 @@ def self_test() -> int:
         lead, wait = 1.0, (2.6, 6.6)       # take t2 waits 1 s, then a backend wait from 2.6 s to 6.6 s
         (d / "takes").mkdir()
         _media.synth_take(d / "takes" / "t1.mp4", 640, 400, 6.0)
-        _media.synth_take(d / "takes" / "t2.mp4", 480, 400, 14.0)   # a narrower take: same scale, centred
+        _media.synth_take(d / "takes" / "even.mp4", 480, 400, 14.0)
+        # t2: a narrower take that drops every other frame from 8 to 10 s, as under load, at the same scale and centred
+        subprocess.run(["ffmpeg", "-v", "error", "-i", str(d / "takes" / "even.mp4"), "-vf",
+                        "select='not(between(t,8,10)*mod(n,2))'", "-fps_mode", "passthrough", str(d / "takes" / "t2.mp4")],
+                       check=True)
         (d / "takes" / "t1.events.json").write_text(json.dumps({"width": 640, "height": 400, "events": [
             {"t": 0.5 + word["synthetic"], "kind": "click", "x": 320, "y": 200, "label": "save"},
             {"t": 0.5, "kind": "mark", "label": "row", "box": {"x": 24, "y": 60, "w": 300, "h": 12}}]}))
@@ -555,6 +562,9 @@ def self_test() -> int:
         srt = (d / "full.srt").read_text() if (d / "full.srt").exists() else ""
         if subs[:1] != ["mov_text"] or "A synthetic page." not in srt or "00:00:00,400 -->" not in srt:
             fails.append(f"soft subtitles: streams {subs}, srt {srt[:80]!r}")
+        tk2 = Take(d / "takes" / "t2.mp4", None)   # 8.04 s falls in the gap after frame 240 (8.0 s)
+        if Decoder(tk2, 8.04, 30).get(8.04).tobytes() != Decoder(tk2, 8.0, 30).get(8.0).tobytes():
+            fails.append("a piece starting in a dropped gap did not open on the frame showing then")
         if tl["scale"] != 1.0:
             fails.append("a full-canvas slot at scale 1.0 did not keep native pixels")
         if srt_time(1.9999999) != "00:00:02,000" or srt_time(3661.25) != "01:01:01,250":

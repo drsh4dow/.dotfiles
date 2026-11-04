@@ -126,13 +126,6 @@ def heard_words(audio: np.ndarray) -> list[dict]:
     return [{"w": w.word.strip(), "start": w.start, "end": w.end} for s in segs for w in s.words]
 
 
-def frame_at(path, t: float, w: int, h: int) -> Image.Image:
-    """The first take frame at or after time t."""
-    raw = subprocess.run(["ffmpeg", "-v", "error", "-ss", f"{t:.4f}", "-i", str(path), "-frames:v", "1",
-                          "-f", "rawvideo", "-pix_fmt", "rgb24", "-"], capture_output=True, check=True).stdout
-    return Image.frombuffer("RGB", (w, h), raw, "raw", "RGB", 0, 1)
-
-
 @functools.cache
 def _clock(take) -> np.ndarray:
     out = subprocess.run(["ffprobe", "-v", "error", "-select_streams", "v:0", "-show_entries", "packet=pts_time,flags",
