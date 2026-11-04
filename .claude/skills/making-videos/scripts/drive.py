@@ -14,6 +14,29 @@ As a module, from a take script of your own (stdlib only):
     t.wrote("note", action_id="<receipt id>")    # a write this take made, with the receipt it owns
     t.stop()                                     # writes takes/t1-save.mp4 and takes/t1-save.events.json
 
+A take cued to the voice fires each action on its word, by cut.py's "Timing a take to the voice" rule:
+
+    t.cue("voice/voice.json", chapter="today", lead=1.0)
+    with t:
+        t.mark_box("strip", "document.querySelector('h1')", t.by_text("p", "Spend"))
+        t.hover(t.by_text("p", "Spend"), "spend", on=t.word("t3", "spend"))
+        t.click(t.by_text("a", "Cal"), "Cal", on=t.word("t7", "table", nth=1))
+        t.wait_until("location.pathname.startsWith('/cal')", "Cal's page", jump_cut=True)
+        t.at(t.word("t8", "below"))
+        t.scroll(400, "down")
+        t.at(t.line_end("t9") + 1)
+
+    t.word(line, w, nth=0)  voice.json time of the nth w in that line, matched without case or punctuation
+    t.line_end(line)        voice.json time that line ends
+    t.at(voice_t)           sleep until that voice time; log "late" when the take is past it by more than LATE_S
+    t.take_t(voice_t)       the take second a voice time lands on, counting the jump cuts so far, so call it where
+                            the action is; it gives an outline's "src" in EDIT.json
+    move, hover, click      with on=voice_t, the pointer arrives or the button goes down then; hover and click look
+                            up the box LOOKUP_S before the word, so a slow lookup is not late. on= is for pointer
+                            actions; t.at(voice_t) cues everything else
+    mark_box(label, *js)    one box around all the elements
+    wait_until(jump_cut=True)   a wait the shot jump-cuts, so later cued actions fire that much later in the take
+
 CLI:
     drive.py preflight --session S --out DIR [--width 1440 --height 900]   # 2 s test take: is the window painting?
     drive.py --self-test
@@ -22,7 +45,7 @@ page_match: the URL substring of the tab that wheel scrolls go to. Empty means t
 
 events.json: {"take", "width", "height", "fps", "recorded_at" (UTC), "events": [{"t", "kind", ...}],
 "provenance": {"states", "writes"}}. t is seconds since `record start`. Logs hold coordinates, labels, lengths
-and IDs, never typed text. Pointer moves are eased (--human) and take 280-900 ms; typing is per character,
+and IDs, never typed text. Pointer moves are eased (--human) and take 120-900 ms; typing is per character,
 35-90 ms apart; scrolls are real wheel events at the pointer (cdp.mjs wheel). One take records one tab: the
 recorder follows the active tab, so a second tab is its own take.
 """
@@ -30,6 +53,7 @@ from __future__ import annotations
 
 import datetime as dt
 import json
+import math
 import random
 import re
 import subprocess
@@ -38,6 +62,15 @@ import time
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
+LATE_S = 0.15
+LOOKUP_S = 1.5  # the longest move, the settle before the press, and a slow eval
+SETTLE_S = 0.12
+
+
+def window_starts(voice: dict) -> dict[str, float]:
+    """Each chapter's window start on voice.json's clock, halfway through the quiet before it, or 0 for the first."""
+    chs = voice["chapters"]
+    return {c["id"]: 0.0 if i == 0 else (chs[i - 1]["end"] + c["start"]) / 2 for i, c in enumerate(chs)}
 
 
 def run_ab(args: list[str], timeout: float = 120) -> subprocess.CompletedProcess:
@@ -58,6 +91,8 @@ class Take:
         self.recorded_at: str | None = None
         self.mouse = (width // 2, height // 2)
         self.rng = random.Random(name)
+        self.lines: dict[str, dict] = {}
+        self.shift = self.jumped = 0.0
 
     # ---- plumbing -------------------------------------------------------
     def ab(self, *args: str, check: bool = True) -> str:
@@ -113,7 +148,7 @@ class Take:
         self.t0 = time.time()
         self.recorded_at = dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds")
         self.log("record_start")
-        self.move(*self.mouse, dur=200)
+        self.glide(*self.mouse, 200)
 
     def stop(self) -> Path:
         self.log("record_stop")
@@ -136,10 +171,48 @@ class Take:
     def mark(self, label: str, **kw) -> None:
         self.log("mark", label=label, **kw)
 
-    def mark_box(self, label: str, js_expr: str, key: str = "box") -> dict:
-        b = self.box(js_expr)
-        self.mark(label, **{key: b})
+    def mark_box(self, label: str, *js_exprs: str) -> dict:
+        """One box around every element, logged as a mark that cut.py outlines can name."""
+        bs = [self.box(e) for e in js_exprs]
+        x0, y0 = min(b["x"] for b in bs), min(b["y"] for b in bs)
+        x1, y1 = max(b["x"] + b["w"] for b in bs), max(b["y"] + b["h"] for b in bs)
+        b = {"x": x0, "y": y0, "w": x1 - x0, "h": y1 - y0}
+        self.mark(label, box=b)
         return b
+
+    def cue(self, voice, chapter: str, lead: float = 1.0) -> None:
+        """Time this take to voice.json, so that chapter's window starts at take second lead."""
+        v = json.loads(Path(voice).read_text())
+        self.lines = {ln["id"]: ln for ln in v["lines"]}
+        self.shift = lead - window_starts(v)[chapter]
+
+    def word(self, line: str, w: str, nth: int = 0) -> float:
+        norm = lambda s: re.sub(r"\W", "", s.lower())  # noqa: E731
+        hits = [x["t"] for x in self.lines[line]["words"] if norm(x["w"]) == norm(w)]
+        if len(hits) <= nth:
+            raise KeyError(f"{w!r} #{nth} not in line {line}: {[x['w'] for x in self.lines[line]['words']]}")
+        return hits[nth]
+
+    def line_end(self, line: str) -> float:
+        return self.lines[line]["end"]
+
+    def take_t(self, voice_t: float) -> float:
+        return voice_t + self.shift + self.jumped
+
+    def at(self, voice_t: float | None, early: float = 0.0) -> None:
+        if voice_t is None:
+            return
+        d = self.take_t(voice_t) - early - self.now()
+        if d > 0:
+            time.sleep(d)
+        elif d < -LATE_S:
+            self.log("late", voice_t=voice_t, by=round(-d, 3))
+
+    def aim(self, js_expr: str, fx: float, fy: float, on: float | None) -> tuple[dict, float, float]:
+        if on is not None:
+            time.sleep(max(0.0, self.take_t(on) - LOOKUP_S - self.now()))
+        b = self.box(js_expr)
+        return b, b["x"] + b["w"] * fx, b["y"] + b["h"] * fy
 
     # ---- geometry -------------------------------------------------------
     def box(self, js_expr: str) -> dict:
@@ -157,30 +230,41 @@ class Take:
         return f"[...document.querySelectorAll({json.dumps(tag)})].find(e=>{cond})"
 
     # ---- pointer ----------------------------------------------------------
-    def move(self, x: float, y: float, dur: int | None = None) -> None:
+    def move(self, x: float, y: float, dur: int | None = None, on: float | None = None) -> None:
+        """An eased move that arrives at voice time on, when given."""
         x, y = int(x), int(y)
-        dist = ((x - self.mouse[0]) ** 2 + (y - self.mouse[1]) ** 2) ** 0.5
-        dur = dur or int(min(900, max(280, dist * 0.9)))
-        self.ab("mouse", "move", str(x), str(y), "--human", "--duration", str(dur), "--steps", str(max(8, dur // 16)),
-                "--seed", str(self.rng.randint(1, 9999)))
+        dist = math.hypot(x - self.mouse[0], y - self.mouse[1])
+        if dist < 2:
+            self.at(on)
+            return
+        dur = dur or int(min(900, max(280 if dist > 60 else 120, dist * 0.9)))
+        self.at(on, early=dur / 1000)
+        self.glide(x, y, dur)
         self.mouse = (x, y)
 
-    def click_xy(self, x: float, y: float, label: str, hold: float = 0.08) -> None:
-        self.move(x, y)
-        time.sleep(0.12)
+    def glide(self, x: int, y: int, dur: int) -> None:
+        self.ab("mouse", "move", str(x), str(y), "--human", "--duration", str(dur), "--steps", str(max(8, dur // 16)),
+                "--seed", str(self.rng.randint(1, 9999)))
+
+    def click_xy(self, x: float, y: float, label: str, hold: float = 0.08, on: float | None = None) -> None:
+        self.move(x, y, on=None if on is None else on - SETTLE_S)
+        time.sleep(SETTLE_S)
         self.log("click", x=int(x), y=int(y), label=label)
+        self.press_button(hold)
+
+    def press_button(self, hold: float) -> None:
         self.ab("mouse", "down")
         time.sleep(hold)
         self.ab("mouse", "up")
 
-    def click(self, js_expr: str, label: str, fx: float = 0.5, fy: float = 0.5) -> dict:
-        b = self.box(js_expr)
-        self.click_xy(b["x"] + b["w"] * fx, b["y"] + b["h"] * fy, label)
+    def click(self, js_expr: str, label: str, fx: float = 0.5, fy: float = 0.5, on: float | None = None) -> dict:
+        b, x, y = self.aim(js_expr, fx, fy, on)
+        self.click_xy(x, y, label, on=on)
         return b
 
-    def hover(self, js_expr: str, label: str) -> dict:
-        b = self.box(js_expr)
-        self.move(b["x"] + b["w"] / 2, b["y"] + b["h"] / 2)
+    def hover(self, js_expr: str, label: str, fx: float = 0.5, fy: float = 0.5, on: float | None = None) -> dict:
+        b, x, y = self.aim(js_expr, fx, fy, on)
+        self.move(x, y, on=on)
         self.log("hover", label=label, **{k: int(v) for k, v in b.items()})
         return b
 
@@ -236,13 +320,16 @@ class Take:
         self.ab("keyboard", "inserttext", text)
 
     # ---- waits (logged so the edit can jump-cut them) ------------------------
-    def wait_until(self, js_cond: str, label: str, timeout: float = 120, every: float = 1.0) -> float:
-        self.log("wait_start", label=label)
+    def wait_until(self, js_cond: str, label: str, timeout: float = 120, every: float = 0.2,
+                   jump_cut: bool = False) -> float:
+        t0 = self.log("wait_start", label=label)["t"]
         start = time.time()
         while time.time() - start < timeout:
             if self.js(f"(()=>{{try{{return !!({js_cond})}}catch(e){{return false}}}})()") is True:
                 took = round(time.time() - start, 1)
-                self.log("wait_end", label=label, took=took)
+                t1 = self.log("wait_end", label=label, took=took)["t"]
+                if jump_cut:
+                    self.jumped += t1 - t0
                 return took
             time.sleep(every)
         self.log("wait_timeout", label=label)
@@ -334,6 +421,49 @@ def self_test() -> int:
             fails.append("event times go backwards")
         if ["wheel", 400, 20] not in calls:
             fails.append("scroll did not wheel at the pointer")
+
+    polls = []
+
+    def fake_paced(args):
+        if args[2:4] == ["mouse", "move"]:
+            time.sleep(int(args[args.index("--duration") + 1]) / 1000)
+        if args[2] == "eval" and "#b" in args[3]:
+            time.sleep(0.4)
+            return R(json.dumps(json.dumps({"x": 300, "y": 200, "w": 50, "h": 10})))
+        if args[2] == "eval" and "!!(lands" in args[3]:
+            polls.append(1)
+            return R("true" if len(polls) > 2 else "false")
+        return fake(args)
+
+    with tempfile.TemporaryDirectory() as tmp:
+        voice = Path(tmp) / "voice.json"
+        voice.write_text(json.dumps({"chapters": [{"id": "c1", "start": 0.3, "end": 2.0}, {"id": "c2", "start": 2.4, "end": 5}],
+                                     "lines": [{"id": "b1", "end": 3.6, "words": [{"w": "Save,", "t": 2.5}, {"w": "it", "t": 2.7},
+                                                                                {"w": "SAVE!", "t": 3.4}]}]}))
+        t = Take("cued", "s", tmp, 800, 600, runner=fake_paced)
+        t.wheel = lambda dy, steps: None
+        lead, window_start = 0.3, (2.0 + 2.4) / 2
+        t.cue(voice, chapter="c2", lead=lead)
+        with t:
+            t.hover("#a", "a", on=t.word("b1", "save"))
+            t.click("#b", "b", on=t.word("b1", "save", nth=1))
+            t.wait_until("lands", "lands", every=0.1, jump_cut=True)
+            t.at(t.line_end("b1"))
+            t.scroll(100)
+            t.at(t.word("b1", "it"))
+            both = t.mark_box("both", "#a", "#b")
+        ev = {e["kind"]: e for e in t.events}
+        jump = ev["wait_end"]["t"] - ev["wait_start"]["t"]
+        for kind, want in (("hover", lead + 2.5 - window_start), ("click", lead + 3.4 - window_start),
+                           ("scroll", lead + 3.6 - window_start + jump)):
+            if abs(ev[kind]["t"] - want) > 0.05:
+                fails.append(f"cued {kind} at take {ev[kind]['t']} s, want {want:.2f} (lead + word - window start + jumps)")
+        if jump < 0.15:
+            fails.append(f"the jump-cut wait took {jump} s, too short to prove the scroll moved by it")
+        if ev.get("late", {}).get("voice_t") != 2.7:
+            fails.append(f"an action past its word logged no late event: {ev.get('late')}")
+        if both != {"x": 100, "y": 40, "w": 250, "h": 170}:
+            fails.append(f"mark_box of two elements gave {both}, want the box around both")
 
     def fake_url(args):
         return R("https://app.example.test/mine\n") if args[2:4] == ["get", "url"] else R()

@@ -24,13 +24,13 @@ EDIT.json (paths relative to it; every box is [x, y, w, h] in canvas pixels unle
      "chapter": null,                                         # null: every chapter; an id: that chapter alone
      "shots": [{"take": "takes/t1.mp4", "chapter": "intro",   # events default: takes/t1.events.json
                 "pieces": [{"play": [0.5, 4]}, {"play": [30, 34], "chip": "auto"}],
-                "outlines": [{"src": [1, 3], "mark": "save", "key": "box", "color": [37, 99, 235]},
+                "outlines": [{"src": [1, 3], "mark": "save", "color": [37, 99, 235]},
                              {"src": [5, 7], "box": [100, 200, 300, 40]}],   # take pixels
                 "rings": true}]}
 
 A piece plays take seconds [s0, s1] at 1.0x, and nothing else: no speed ramps, no freeze holds. Consecutive
 pieces that skip take time are a jump cut; "chip": "auto" on the later piece shows "N s later" in chip_box.
-Rings come from the take's logged clicks. Outlines come from a logged DOM box ("mark", "key") or a literal
+Rings come from the take's logged clicks. Outlines come from a logged DOM box ("mark") or a literal
 take-pixel box; they cover the take seconds "src".
 
 The voice: with "chapter": null the cut plays voice.json and narration.wav on their own clock. With a chapter
@@ -71,6 +71,7 @@ from PIL import Image, ImageDraw
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import _media  # noqa: E402
+from drive import window_starts  # noqa: E402
 
 SR = 48000
 CAPTION_LEAD = 0.05
@@ -104,7 +105,7 @@ class Take:
     def rect(self, o: dict) -> list[float]:
         if "box" in o:
             return [float(v) for v in o["box"]]
-        b = self.marks[o["mark"]][o.get("key", "box")]
+        b = self.marks[o["mark"]]["box"]
         return [b["x"] * self.k, b["y"] * self.k, b["w"] * self.k, b["h"] * self.k]
 
 
@@ -216,9 +217,8 @@ class Cut:
         vpath = self.root / e["voice"]
         voice = json.loads(vpath.read_text())
         self.voice_wav, self.voice_out = vpath.parent / "narration.wav", self.out.with_name(self.out.stem + "-voice.wav")
-        chs = voice["chapters"]
-        b = [0.0] + [(p["end"] + c["start"]) / 2 for p, c in zip(chs, chs[1:])] + [voice["duration"]]
-        starts = {c["id"]: b[i] for i, c in enumerate(chs)}   # each chapter's window start, on voice.json's clock
+        starts = window_starts(voice)
+        b = [*starts.values(), voice["duration"]]
         pick = e.get("chapter")
         if pick is not None and pick not in starts:
             raise EditError(f"chapter '{pick}' is not in {vpath}")

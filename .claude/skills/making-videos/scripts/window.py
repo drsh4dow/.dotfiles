@@ -197,13 +197,9 @@ class WindowTake(Take):
         return self.save()
 
     # ---- pointer: real X pointer events --------------------------------------
-    def move(self, x: float, y: float, dur: int | None = None) -> None:
-        x, y = int(x), int(y)
+    def glide(self, x: int, y: int, dur: int) -> None:
         x0, y0 = self.mouse
         dist = math.hypot(x - x0, y - y0)
-        if dist < 2:  # already there: a click after a hover must not wait out a move
-            return
-        dur = dur or int(min(900, max(280 if dist > 60 else 120, dist * 0.9)))
         steps = max(8, dur // 16)
         bow = self.rng.uniform(-0.08, 0.08) * dist  # a slight arc, as a hand draws it
         cmd: list[str] = []
@@ -215,16 +211,16 @@ class WindowTake(Take):
             cmd += ["mousemove", str(round(px)), str(round(py)), "sleep", f"{dur / steps / 1000:.3f}"]
         cmd += ["mousemove", str(x), str(y)]
         self.x(*cmd)
-        self.mouse = (x, y)
 
-    def click_xy(self, x: float, y: float, label: str, hold: float = 0.08, chrome: bool = False) -> None:
+    def click_xy(self, x: float, y: float, label: str, hold: float = 0.08, chrome: bool = False,
+                 on: float | None = None) -> None:
         """chrome=True allows a click on the browser's own tabs or address bar; otherwise one is an error, because
         it means the box was measured before a scroll or a layout shift moved the element away."""
         if not chrome and not (self.offset[1] <= y < self.height and 0 <= x < self.width):
             raise RuntimeError(f"click at {int(x)},{int(y)} for '{label}' is outside the page area")
-        self.move(x, y)
-        time.sleep(0.12)
-        self.log("click", x=int(x), y=int(y), label=label)
+        super().click_xy(x, y, label, hold, on)
+
+    def press_button(self, hold: float) -> None:
         self.x("mousedown", "1", "sleep", f"{hold:.2f}", "mouseup", "1")
 
     def drag(self, x0, y0, x1, y1, label: str, dur: int = 700) -> None:
@@ -241,11 +237,6 @@ class WindowTake(Take):
         btn = ("7" if dy > 0 else "6") if horizontal else ("5" if dy > 0 else "4")
         # one repeat click: a chain of click and sleep commands costs about 90 ms more per click in xdotool
         self.x("click", "--repeat", str(clicks), "--delay", str(int(self.rng.uniform(45, 70))), btn)
-
-    def scroll(self, dy: int, label: str = "scroll") -> None:
-        self.log("scroll", dy=dy, label=label)
-        self.wheel(dy, 0)
-        time.sleep(0.3)
 
     def hscroll(self, dx: int, label: str = "scroll sideways") -> None:
         """A sideways wheel (X buttons 6 and 7), as a trackpad swipe sends: dx > 0 scrolls right."""
