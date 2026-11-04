@@ -55,11 +55,25 @@ def probe(path) -> dict:
             "audio": any(s["codec_type"] == "audio" for s in d["streams"])}
 
 
-def decode(path, every: int = 1, crop: tuple | None = None):
-    """Yield (frame index, HxWx3 uint8) for every `every`-th frame, selected by index, never resampled by time."""
+def _any(terms):
+    """terms joined by + as a balanced tree: ffmpeg's parser fails past about 100 nested terms, and this nests log2 of
+    the count. One command line holds about 8000 of them."""
+    half = len(terms) // 2
+    return terms[0] if len(terms) == 1 else f"({_any(terms[:half])}+{_any(terms[half:])})"
+
+
+def decode(path, every: int = 1, crop: tuple | None = None, only=None):
+    """Yield (frame index, HxWx3 uint8) for every `every`-th frame, or for each index in `only`, selected by index,
+    never resampled by time."""
     info = probe(path)
     w, h = info["w"], info["h"]
-    vf = [f"select='not(mod(n\\,{every}))'"] if every > 1 else []
+    keep = sorted(set(only or ()))
+    if only is not None and not keep:
+        return
+    if keep:
+        vf = ["select='" + _any([f"eq(n\\,{n})" for n in keep]) + "'"]
+    else:
+        vf = [f"select='not(mod(n\\,{every}))'"] if every > 1 else []
     if crop:
         x, y, cw, ch = crop
         vf.append(f"crop={cw}:{ch}:{x}:{y}")
@@ -67,6 +81,7 @@ def decode(path, every: int = 1, crop: tuple | None = None):
     cmd = ["ffmpeg", "-v", "error", "-i", str(path), "-map", "0:v"]
     if vf:
         cmd += ["-vf", ",".join(vf)]
+    cmd += ["-frames:v", str(len(keep))] if keep else []
     cmd += ["-fps_mode", "passthrough", "-pix_fmt", "rgb24", "-f", "rawvideo", "-"]
     proc = subprocess.Popen(cmd, stdout=subprocess.PIPE)
     size, n, done = w * h * 3, 0, False
@@ -75,7 +90,7 @@ def decode(path, every: int = 1, crop: tuple | None = None):
             buf = proc.stdout.read(size)
             if len(buf) < size:
                 break
-            yield n * every, np.frombuffer(buf, np.uint8).reshape(h, w, 3)
+            yield keep[n] if keep else n * every, np.frombuffer(buf, np.uint8).reshape(h, w, 3)
             n += 1
         done = True
     finally:

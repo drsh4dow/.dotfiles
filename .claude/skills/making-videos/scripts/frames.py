@@ -28,16 +28,6 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import _media  # noqa: E402
 
 
-def pick(video: Path, wanted: set[int]) -> dict[int, np.ndarray]:
-    got = {}
-    for n, f in _media.decode(video):
-        if n in wanted:
-            got[n] = f.copy()
-        if len(got) == len(wanted):
-            break
-    return got
-
-
 def label(img: Image.Image, n: int, fps: float) -> Image.Image:
     d = ImageDraw.Draw(img)
     txt = f"f{n}  {int(n / fps // 60)}:{n / fps % 60:06.3f}"
@@ -62,26 +52,21 @@ def run(video: Path, out: Path, every=None, at=(), around=(), cols=5, width=384)
     fps, last = info["fps"], int(info["duration"] * info["fps"]) - 1
     idx = lambda t: min(last, max(0, round(t * fps)))  # noqa: E731
     out.mkdir(parents=True, exist_ok=True)
+    sheets = list(range(0, last + 1, max(1, round(every * fps)))) if every else []
+    full = [idx(t) for t in at]
+    arounds = [(c, [n for n in range(c - 2, c + 3) if 0 <= n <= last]) for c in map(idx, around)]
+    got = dict(_media.decode(video, only={*sheets, *full, *(n for _, ns in arounds for n in ns)}))
     written = []
-    if every:
-        ns = list(range(0, last + 1, max(1, round(every * fps))))
-        got = pick(video, set(ns))
-        per = cols * 4
-        for s in range(0, len(ns), per):
-            p = out / f"sheet-{s // per + 1:02d}.jpg"
-            sheet([(n, got[n]) for n in ns[s:s + per] if n in got], fps, cols, width).save(p, quality=88)
-            written.append({"file": p.name, "frames": ns[s:s + per]})
-    if at:
-        ns = [idx(t) for t in at]
-        got = pick(video, set(ns))
-        for n in ns:
-            p = out / f"frame-{n:06d}.png"
-            Image.fromarray(got[n]).save(p)
-            written.append({"file": p.name, "frames": [n], "t": n / fps})
-    for t in around:
-        c = idx(t)
-        ns = [n for n in range(c - 2, c + 3) if 0 <= n <= last]
-        got = pick(video, set(ns))
+    per = cols * 4
+    for s in range(0, len(sheets), per):
+        p = out / f"sheet-{s // per + 1:02d}.jpg"
+        sheet([(n, got[n]) for n in sheets[s:s + per] if n in got], fps, cols, width).save(p, quality=88)
+        written.append({"file": p.name, "frames": sheets[s:s + per]})
+    for n in full:
+        p = out / f"frame-{n:06d}.png"
+        Image.fromarray(got[n]).save(p)
+        written.append({"file": p.name, "frames": [n], "t": n / fps})
+    for c, ns in arounds:
         p = out / f"around-{c:06d}.jpg"
         sheet([(n, got[n]) for n in ns], fps, len(ns), width).save(p, quality=88)
         written.append({"file": p.name, "frames": ns})
@@ -93,16 +78,23 @@ def self_test() -> int:
     fails = []
     with tempfile.TemporaryDirectory() as tmp:
         d = Path(tmp)
-        # frame n is a flat grey of value 4n, so a picked frame names its own index
-        _media.write_video(d / "v.mp4", (np.full((120, 160, 3), 4 * n, np.uint8) for n in range(60)), 160, 120, 30)
+        # frame n is a flat grey of value 4 * (n % 64), so neighbouring frames differ
+        _media.write_video(d / "v.mp4", (np.full((120, 160, 3), 4 * (n % 64), np.uint8) for n in range(150)), 160, 120, 30)
         w = run(d / "v.mp4", d / "o", every=0.5, at=[1.0], around=[0.5])
         px = np.asarray(Image.open(d / "o" / "frame-000030.png"))[100, 100]
-        if abs(int(px[0]) - 120) > 6:
+        if abs(int(px[0]) - 120) > 2:
             fails.append(f"--at 1.0 picked a frame of value {px[0]}, want frame 30 (120)")
-        if [x["frames"] for x in w if x["file"].startswith("sheet")] != [[0, 15, 30, 45]]:
+        if [x["frames"] for x in w if x["file"].startswith("sheet")] != [list(range(0, 150, 15))]:
             fails.append(f"--every 0.5 frames {w}")
         if not any(x["file"] == "around-000015.jpg" and x["frames"] == [13, 14, 15, 16, 17] for x in w):
             fails.append(f"--around 0.5 frames {w}")
+        _media.write_video(d / "long.mp4", (np.full((16, 16, 3), 4 * (n % 64), np.uint8) for n in range(3000)), 16, 16, 30)
+        full = dict(_media.decode(d / "long.mp4"))
+        many = dict(_media.decode(d / "long.mp4", only=range(1, 3000)))
+        if list(many) != list(range(1, 3000)) or any((many[n] != full[n]).any() for n in many):
+            fails.append(f"picking 2999 of 3000 frames gave {len(many)}, or a frame other than the one asked for")
+        if list(_media.decode(d / "v.mp4", only=())):
+            fails.append("picking no frames decoded some")
     print("frames.py self-test: " + ("PASS" if not fails else "FAIL\n  " + "\n  ".join(fails)))
     return 0 if not fails else 1
 
