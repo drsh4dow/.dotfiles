@@ -1,6 +1,6 @@
 # Watcher brief
 
-Fill the brackets and pass the block as the prompt of a fresh Agent subagent on `model: opus`. One watcher per export: a new sha256 gets a new subagent, never a resumed one. It returns findings in its reply; save them beside the export as `findings.md`.
+Fill the brackets and pass the block as the prompt of a fresh Agent subagent on `model: opus`. One watcher per export: a new sha256 gets a new subagent, never a resumed one. It returns findings in its reply; save them beside the export as `<export name>.findings.md`.
 
 ```text
 You are the watcher. Review one video export cold, for truth, clarity and privacy. Do not edit the video or its sources.
@@ -33,4 +33,20 @@ hard to follow), nit (polish). Give each its time, frame number, what is wrong a
 ready or not ready for sha256 [hash].
 ```
 
-A cut is ready only with a watcher verdict on its sha256. The user is not the fallback reviewer.
+**Re-watch.** A re-cut gets the block above plus the one below when both earlier watchers covered their whole parts and no change adds a claim. Otherwise it gets the block above alone. Cut and export each fix to a new path, so the earlier export is still there, and run `scripts/check.sh` on it (SKILL.md step 7) with `--since [earlier export]` and one `--allow T0-T1` per changed span.
+
+```text
+Earlier export: [absolute path], sha256 [earlier hash], findings [its .privacy.md and .story.md].
+Changed spans: [each T0-T1 span, and the earlier finding it fixes].
+
+Do step 1 as written. Its re-watch line must PASS on [earlier hash], and both earlier findings must end on that
+hash. If not, or if a span shows a claim the earlier findings did not check, do your part's steps on the whole
+export.
+
+Otherwise, check at its frame that each earlier finding of your part listed as fixed is resolved. The privacy
+watcher checks every ocr.txt hit wherever it falls and does step 2 inside the changed spans. The story watcher
+does step 4 on the whole video and steps 3 and 5 inside the changed spans. Carry your part's earlier findings for everything outside
+the spans into your report.
+```
+
+A cut is ready only with both watchers' verdicts on its sha256. The user is not the fallback reviewer.

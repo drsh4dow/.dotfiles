@@ -39,7 +39,7 @@ Copy these into your todo list. Each ends on its done-when.
 5. **One chapter first.** Cut one chapter in its final framing, give the user its path, open it, and wait for a yes. If the user told you to run without stopping, log that you skipped the wait and show the chapter at handoff. Done on the user's yes or the logged skip.
 6. **Cut and mix.** Per [references/cut-and-mix.md](references/cut-and-mix.md). Done when the export exists and you know its sha256.
 7. **Check the export.** Run `scripts/check.sh` once per export, per [references/checks.md](references/checks.md). Done when `checks/verdict.txt` has no FAIL line and you have looked by eye at each LOOK hit and at what no script covers.
-8. **Watch.** Brief a fresh subagent from [references/watcher-brief.md](references/watcher-brief.md) for each new sha256. Fix its blockers, and the should-fixes that need no new voice or take, re-export, run step 7 on the new export, and only then send it to a new watcher. A should-fix that needs a new voice or take goes in the README for the user to pick. Stop at a ready verdict or after three rounds, and report what is left.
+8. **Watch.** Brief a fresh subagent from [references/watcher-brief.md](references/watcher-brief.md) for each new sha256. Fix its blockers, and the should-fixes that need no new voice or take, re-export, run step 7 on the new export, and only then send it to a new watcher, with the re-watch block when [references/watcher-brief.md](references/watcher-brief.md) allows it. A should-fix that needs a new voice or take goes in the README for the user to pick. Stop at a ready verdict or after three rounds, and report what is left.
 9. **Hand off.** Done when the user has the path and the file is open.
 
 ## Handoff
