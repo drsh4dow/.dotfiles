@@ -35,6 +35,7 @@ Copy these into your todo list. Each ends on its done-when.
    | An Android or iOS app | [references/capture-mobile.md](references/capture-mobile.md) |
    | Motion graphics, a promo, an explainer, a terminal tutorial | [references/compose.md](references/compose.md) |
 
+   Re-take only for what a watcher would rank a blocker.
    Done when you have looked at full-size frames of every take or scene yourself, and each logged click or tap lands on the frame where the UI reacts, measured on the take's clock.
 5. **One chapter first.** Cut one chapter in its final framing, give the user its path, open it, and wait for a yes. If the user told you to run without stopping, log that you skipped the wait and show the chapter at handoff. Done on the user's yes or the logged skip.
 6. **Cut and mix.** Per [references/cut-and-mix.md](references/cut-and-mix.md). Done when the export exists and you know its sha256.
