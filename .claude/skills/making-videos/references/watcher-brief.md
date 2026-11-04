@@ -24,7 +24,7 @@ Author's verdict: [absolute path of checks/verdict.txt].
    it. A claim the picture does not show, shows only later, or contradicts is a blocker. So is a control the
    voice says worked that did not.
 4. Watch as the audience. Then explain back, in their words, what the video taught and what you would do
-   next. Each step you could not explain is a should-fix.
+   next. Each step you could not explain, and each screen still for over 2 s, is a should-fix.
 5. Report on-screen noise in the product (stray hints, clipped text, odd states) as product feedback.
 
 Rank each finding: blocker (a false or unshown claim, a privacy break, a failed check), should-fix (shown but

@@ -224,7 +224,6 @@ def spans(path, a, b):
     return list(zip(s, e + [dur] * (len(s) - len(e))))
 out, bad = [f"duration {dur:.2f} s, profile {profile}"], False
 fr = spans(f"{c}/picture.log", "lavfi.freezedetect.freeze_start", "lavfi.freezedetect.freeze_end")
-out += [f"frozen spans >= {DEAD} s: {len(fr)}", *[f"  {a:.2f}-{b:.2f}" for a, b in fr]]
 if profile == "captions":
     out += [f"{k}: not applicable (captions-only profile)" for k in ("dead air", "quiet gaps", "loudness")]
 elif not os.path.exists(f"{c}/silencedetect.log"):
@@ -237,8 +236,7 @@ else:
     log = open(f"{c}/ebur128.log").read()
     lufs, lra, tp = (re.findall(p, log) for p in (r"I:\s*(-?[\d.]+) LUFS", r"LRA:\s*(-?[\d.]+) LU", r"Peak:\s*(-?[\d.]+) dBFS"))
     loud_bad = not (lufs and tp) or abs(float(lufs[-1]) + 16) > 1 or float(tp[-1]) > -1.0
-    out += [f"silent spans >= {DEAD} s: {len(si)}", *[f"  {a:.2f}-{b:.2f}" for a, b in si],
-            f"dead air (frozen and silent at once, over {DEAD} s): {'FAIL' if over else 'PASS'}, {len(over)}",
+    out += [f"dead air (frozen and silent at once, over {DEAD} s): {'FAIL' if over else 'PASS'}, {len(over)}",
             *[f"  {a:.2f}-{b:.2f} ({b - a:.2f} s)" for a, b in over],
             f"loudness: {'FAIL' if loud_bad else 'PASS'}, {lufs[-1] if lufs else 'not measured'} LUFS integrated (-16 +-1), "
             f"LRA {lra[-1] if lra else 'not measured'} LU, true peak {tp[-1] if tp else 'not measured'} dBTP (at most -1.0)"]
