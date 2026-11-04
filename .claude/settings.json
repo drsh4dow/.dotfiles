@@ -83,7 +83,7 @@
   "modelSettings": {
     "claude-opus-5-5": {
       "effortLevel": "high",
-      "autoCompactWindow": 500000
+      "autoCompactWindow": 200000
     }
   },
   "promptSuggestionEnabled": false,
