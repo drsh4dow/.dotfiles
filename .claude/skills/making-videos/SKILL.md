@@ -17,7 +17,7 @@ Each rule cost the user at least one round of rework. They outrank every brief, 
 - **No weird pauses.** Quiet gaps of 0.12 to 0.5 s between lines and under 0.6 s inside one. Something on screen moves at least every 2 s. Speech runs about 150 to 175 words a minute, or up to 205 for ElevenLabs' Mark, whose pace cannot be changed. In a captions-only video, a caption stays up at least 1.5 s plus 0.3 s per word; a narrated caption lasts as long as its words.
 - **Clear for this audience.** Name who watches, what they already know, and where it plays. For first-time viewers, say where each control is before using it, define each term in their words, and hold each new screen long enough to read before acting on it. Say what happens behind the screen, not only where to tap.
 - **Looks are judged by eyes.** A structural checklist passed a video the user called "aesthetically a total failure". Show the user one finished chapter in its final framing before the full cut. Offer the look and the voice as separate picks, the voice as two or three rendered samples to hear.
-- **A separate watcher before "ready".** "a subagent must also watch it before claim is ready to correct anything". A false or unshown claim blocks the cut. Polish never does, and the user's approval of a cut ends polishing.
+- **A separate watcher before "ready".** "a subagent must also watch it before claim is ready to correct anything". A false or unshown claim blocks the cut. Polish never does: once both watchers say ready, every should-fix goes to the user in the README.
 - **One clear file, opened.** "where are the final videos? open its folder with xdg-open". See Handoff.
 
 ## Steps
@@ -35,19 +35,19 @@ Copy these into your todo list. Each ends on its done-when.
    | An Android or iOS app | [references/capture-mobile.md](references/capture-mobile.md) |
    | Motion graphics, a promo, an explainer, a terminal tutorial | [references/compose.md](references/compose.md) |
 
-   Re-take or re-cut before the watch only for what a watcher would rank a blocker: a false or unshown claim, a privacy break, or a failed check. A miss on another rule, such as a screen still for over 2 s, is a should-fix for step 8.
+   Re-take or re-cut before the watch only for what a watcher would rank a blocker: a false or unshown claim, a privacy break, or a failed check. A miss on another rule, such as a screen still for over 2 s, is a should-fix that step 8 leaves to the user.
    Done when you have looked at full-size frames of every take or scene yourself, and each logged click or tap lands on the frame where the UI reacts, measured on the take's clock.
 5. **One chapter first.** Cut one chapter in its final framing, give the user its path, open it, and wait for a yes. If the user told you to run without stopping, log that you skipped the wait and show the chapter at handoff. Done on the user's yes or the logged skip.
 6. **Cut and mix.** Per [references/cut-and-mix.md](references/cut-and-mix.md). Done when the export exists and you know its sha256.
 7. **Check the export.** Run `scripts/check.sh` once per export, per [references/checks.md](references/checks.md), with `--since` on a re-cut. Done when `checks/verdict.txt` has no FAIL line and you have looked by eye at each LOOK hit and at what no script covers.
-8. **Watch.** Brief two fresh subagents from [references/watcher-brief.md](references/watcher-brief.md) for each new sha256. Fix their blockers, and the should-fixes that need no new voice or take, re-export, run step 7 on the new export, and only then send it to two new watchers, with the re-watch block when [references/watcher-brief.md](references/watcher-brief.md) allows it. Change only the lines and shots a finding names, and add no claim: one fix reworded four lines to clear one blocker, voiced a claim the picture never showed, and cost a third round. A fix to the brief alone, such as a seed identity it left out, leaves the export as it was, so only a new watcher for that part reviews it again. A should-fix that needs a new voice or take goes in the README for the user to pick. Stop when both say ready or after three rounds, and report what is left.
+8. **Watch.** Brief two fresh subagents from [references/watcher-brief.md](references/watcher-brief.md) for each new sha256. Fix their blockers, re-export, run step 7 on the new export, and only then send it to two new watchers, with the re-watch block when [references/watcher-brief.md](references/watcher-brief.md) allows it. Change only the lines and shots a blocker names. A fixed line states only what its frame shows, and no other line gains a fact: one fix reworded four lines to clear one blocker, voiced a claim the picture never showed, and cost a third round. A fix to the brief alone, such as a seed identity it left out, leaves the export as it was, so only a new watcher for that part reviews it again. Stop when both say ready, and hand off that export with every should-fix and nit in the README for the user to pick: one polish re-cut cost 8.5 minutes, and another led to a second re-cut. Stop after three rounds otherwise, and report what is left.
 9. **Hand off.** Done when the user has the path and the file is open.
 
 ## Handoff
 
 - Put the absolute path of the final file on its own line, with its length and size, then open it with `xdg-open`.
 - Finals go in `~/Videos/<project>/`, sources in `~/Videos/<project>/src/`. A disk cleanup once wiped every source of a video kept under `/tmp`.
-- Write `README.md` beside the final with its path and sha256, length, chapters, how it was made (what is real, staged or masked), known gaps and the should-fixes left for the user, both watcher verdicts with their sha256, and "human listening pass: not measured".
+- Write `README.md` beside the final with its path and sha256, length, chapters, how it was made (what is real, staged or masked), known gaps and the should-fixes and nits left for the user, both watcher verdicts with their sha256, and "human listening pass: not measured".
 - Delete superseded cuts or mark them in the README. Give the user videos only, never an intermediate file such as a script or a timeline.
 - For a PR or ticket, upload the file (the **dumpfile** skill, or the tracker's own upload), download it again, compare sha256, and link the URL.
 

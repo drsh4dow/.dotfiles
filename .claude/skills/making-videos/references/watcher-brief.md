@@ -30,7 +30,8 @@ Author's verdict: [absolute path of checks/verdict.txt].
 Rank each finding: blocker (a false or unshown claim, a privacy break, a failed check), should-fix (shown but
 hard to follow), nit (polish). A story watcher notes a frame it doubts for privacy and leaves it out of its
 verdict, since the privacy watcher rules on it. Give each its time, frame number, what is wrong and the
-evidence. End with: ready or not ready for sha256 [hash].
+evidence. End with: ready, or not ready when you found a blocker, for sha256 [hash]. Should-fixes and nits
+alone mean ready.
 ```
 
 **Re-watch.** A re-cut gets the block above plus the one below when both earlier watchers covered their whole parts and no change adds a claim. Otherwise it gets the block above alone. Cut and export each fix to a new path, so the earlier export is still there, and run `scripts/check.sh` on it (SKILL.md step 7) with `--since [earlier export]` and one `--allow T0-T1` per changed span.
