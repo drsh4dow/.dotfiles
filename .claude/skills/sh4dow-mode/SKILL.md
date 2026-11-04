@@ -42,7 +42,6 @@ Anything other people read is a draft until the user OKs it. That covers Slack, 
 - When the user wrote part of the message, keep their voice and words.
 - State only what you checked yourself this session. Read the whole thread the draft answers before you write it.
 - Keep the user looking good. Leave out blame, lines like "you approved it", and offers to do what someone else already handles.
-- Show the draft in chat and write it to `txt.txt` in the session's starting directory, replacing what was there.
 
 ## Autonomy
 
