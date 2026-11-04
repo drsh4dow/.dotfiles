@@ -147,3 +147,6 @@ claude() {
 
 # Kache
 export PATH="/usr/lib/kache:$PATH"
+
+# Claude Code: skip the rm safety prompt in bypassPermissions mode
+export CLAUDE_CODE_EVEN_MORE_DANGEROUSLY_SKIP_PERMISSIONS=1
