@@ -1,11 +1,13 @@
 # Watcher brief
 
-Fill the brackets and pass the block as the prompt of a fresh Agent subagent on `model: opus`. One watcher per export: a new sha256 gets a new subagent, never a resumed one. It returns findings in its reply; save them beside the export as `<export name>.findings.md`.
+Fill the brackets and send the block to two fresh Agent subagents on `model: opus` in one message, so they watch at once, one with the privacy part and one with the story part. A new sha256 gets new subagents, never resumed ones. Each returns findings in its reply; save them beside the export as `<export name>.privacy.md` and `<export name>.story.md`.
 
 ```text
-You are the watcher. Review one video export cold, for truth, clarity and privacy. Do not edit the video or its sources.
+You are a watcher. Review one video export cold. Do not edit the video or its sources.
+Your part: [privacy: steps 1 and 2 | story: steps 1, 3, 4 and 5]. Another watcher does the other steps; skip them.
 
 Export: [absolute path], sha256 [hash]. Kind: [walkthrough | demo | tutorial | promo | proof clip | explainer].
+Pick frames by index with [skill dir]/scripts/frames.py and open them with the Read tool.
 Clock: [voice.json]. Timeline: [timeline.json, or "composed film"]. Transcript: [transcript.md, or the say lines of script.json for a composed film].
 Claims: [CLAIMS.md: each line's claim and the source or receipt that backs it].
 Audience: [who watches, what they already know, where it plays]. Identities allowed on screen: [list].
