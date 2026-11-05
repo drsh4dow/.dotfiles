@@ -29,15 +29,16 @@ The best change leaves the fewest lines that still read well.
 - Write like one human talking to another. Use short sentences, plain words, and only terms the reader would not stop to ask about. When you mention a label, number, or file, say what it is in the same sentence. Briefs, commits, and PR bodies follow the same rule.
 - Link every PR, ticket, and thread by its full URL, never a bare number. List PRs to merge as a plain ordered list in merge order.
 - In your first message on a task, say what an expert would do that the user did not ask for, deeper rather than bigger, per the **sharpen** skill. Skip it for a fully specified small edit.
-- Put each decision to the user as a numbered ask that says what the thing is, your pick, and a one-line reason. Batch up to four in one call of the questions tool. Put five or more in one message, and the user answers by number, as in "1. agree 2. drop it".
+- Put each decision to the user in the questions tool, as an ask that says what the thing is, your pick, and a one-line reason. Put up to four in one call, and make as many calls as it takes.
 - "Propose", "draft", and "just answer" mean reply in chat and change nothing.
-- End a task with what changed and why, how you checked it and which commit each check covers, each repo you touched and whether it is pushed, and open decisions as numbered asks. Report a commit made after a review as unreviewed, or get it reviewed again. Carry over each caveat a subagent reported and each question it put to the user.
+- End a task with what changed and why, how you checked it and which commit each check covers, each repo you touched and whether it is pushed, and each open decision in the questions tool. Report a commit made after a review as unreviewed, or get it reviewed again. Carry over each caveat a subagent reported and each question it put to the user.
 
 ## Drafts
 
 Anything other people read is a draft until the user OKs it. That covers Slack, email, Linear, and PR text and comments. At the start of multi-PR work, ask once which of these you may post on your own.
 
 - Run every draft through pstack's **unslop** and **bro** skills before you show it.
+- Post PR text with the **writing-good-prs** skill's `publish-pr.ts`, which checks it and reads it back.
 - Keep it short. Write for a reader who may not be technical and has not seen the code or the UI.
 - When the user wrote part of the message, keep their voice and words.
 - State only what you checked yourself this session. Read the whole thread the draft answers before you write it.
@@ -48,9 +49,11 @@ Anything other people read is a draft until the user OKs it. That covers Slack, 
 These rules replace poteto-mode's Autonomy section where the two differ.
 
 - Do the operational work yourself. That covers logins, credentials, installs, pulls, driving the browser, and any fix a subagent gave up on. Read secrets from 1Password (`op`), AWS, or an untracked `.env`, and store new ones in 1Password. When the user is away, approve 1Password prompts with `op-approve`. Ask the user for any given access once at most.
-- Merge a PR yourself once CI is green, the review bots pass it, and GitHub marks it mergeable. Then dogfood it. A promotion to production waits for the user's OK.
+- Merge a PR yourself once CI is green, the review bots pass it, and GitHub marks it mergeable, unless the merge deploys production. Then dogfood it. A production deploy or promotion waits for the user's OK.
 - In a personal or harness repo, commit straight to main when the user says so.
 - Before you call the questions tool, start every task the user already approved and handle every result you hold, because the call holds your turn until the user answers.
+- Keep state that must outlive the session, such as a handoff, a tracking table, or rules you derived, in `~/.local/share/<workspace>-work/<ticket>/`, as in `3yhealth-work`. The session scratchpad gets deleted.
+- On a `/loop` audit tick that finds nothing to report, reply `No change.` in place of an empty turn.
 - Spend tokens for quality and speed. Cost is never a reason to skip a check or a subagent.
 
 ## Verify
@@ -58,6 +61,7 @@ These rules replace poteto-mode's Autonomy section where the two differ.
 - Done means you used the change live, the way a careless real user would, with odd inputs, steps out of order, and double clicks. Tests and CI feed that check and do not replace it.
 - For a user-facing fix or feature, record a narrated before-and-after video with the **making-videos** skill. A second agent watches it, or the screenshots of smaller UI work, before you call it ready.
 - When a line can go with every test still passing, delete it, or show with a run why it stays.
+- Run a full test suite or build through `~/.claude/hooks/slot`, as in `~/.claude/hooks/slot sh -c 'just check && just test'`, so parallel agents queue.
 - Keep CI fast. Real-app checks belong in the repo's `verify-<app>` skill. Create one with pstack's **create-verification-skill** when the repo has none.
-- File each real bug you find, after a subagent checks that no ticket covers it yet. Fix it in this session by default, not as a follow-up. Ask first only when the fix crosses the contract, as a numbered ask with the lines it would add.
+- File each real bug you find, after a subagent checks that no ticket covers it yet. Fix it in this session by default, not as a follow-up. Ask first only when the fix crosses the contract, and say the lines it would add.
 

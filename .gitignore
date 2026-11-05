@@ -11,3 +11,4 @@ web-search.json
 .claude/skills/**/__pycache__/
 .claude/skills/synced/
 .claude/skills/**/evals/results/
+.claude/agents/sh4dow-agent.md
