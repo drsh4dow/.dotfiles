@@ -3,8 +3,12 @@
 #
 #   check.sh VIDEO.mp4 [--profile narrated|captions] [--timeline T.json] [--voice VOICE.wav] [--area W:H:X:Y]
 #            [--caption-box X,Y,W,H] [--since EARLIER.mp4 [--allow T0-T1]...] [--out DIR]
+#   check.sh --setup [web] [android] [ios] [compose]
 #   check.sh --self-test
 #
+# --setup checks this machine before a video: the tools every video needs, the tools each named picture kind needs,
+# the speech model and a voice key. It prints "setup: ready" and exits 0, or names what is missing and what to do,
+# and exits 1.
 # Profiles: narrated (the default) runs every check, and fails a video with no audio stream. captions, for a
 # captions-only clip with no voice, reports dead air, quiet gaps and loudness as not applicable, because its
 # holds are frozen and silent by design. The profile and --voice pass on to sync.py.
@@ -34,6 +38,46 @@
 # Exit 1 when an applicable check fails, 0 otherwise.
 set -euo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
+
+need() {
+  case "$1" in
+    video) echo "bash ffmpeg ffprobe uv python3 jq tesseract sha256sum" ;;
+    web) echo "Xvfb xdotool xdpyinfo agent-browser node ${CHROMIUM:-chromium}" ;;
+    android) echo "adb emulator avdmanager maestro java" ;;
+    ios) echo "xcrun maestro java" ;;
+    compose) echo "node npx bun" ;;
+    *) return 1 ;;
+  esac
+}
+
+has() {
+  local v
+  [ "$1" = bash ] || command -v "$1" > /dev/null || return 1
+  case "$1" in
+    bash) [ "${BASH_VERSINFO[0]}" -ge 4 ] ;;
+    node) v="$(node -v)"; v="${v#v}"; [ "${v%%.*}" -ge 22 ] 2> /dev/null ;;
+    java) [[ "$(java -version 2>&1)" =~ \"([0-9]+) ]] && [ "${BASH_REMATCH[1]}" -ge 17 ] ;;
+    ffmpeg) [[ "$(ffmpeg -hide_banner -encoders)" == *libx264* ]] ;;
+    xcrun) xcrun simctl help > /dev/null 2>&1 ;;
+  esac
+}
+
+setup() {
+  local k t m hub tools miss=() rc=0 doc="${HERE%/scripts}/references/setup.md"
+  for k in video "$@"; do
+    tools="$(need "$k")" || { echo "check.sh: --setup takes web, android, ios or compose, not $k" >&2; return 2; }
+    for t in $tools; do has "$t" || miss+=("$t ($k)"); done
+  done
+  m="${WHISPER_MODEL:-small.en}" hub="${HF_HUB_CACHE:-${HUGGINGFACE_HUB_CACHE:-${HF_HOME:-${XDG_CACHE_HOME:-$HOME/.cache}/huggingface}/hub}}"
+  [[ "$m" == */* || "$m" == *distil* || "$m" == *turbo ]] ||
+    compgen -G "$hub/models--Systran--faster-whisper-$m/snapshots/*/model.bin" > /dev/null || miss+=("faster-whisper $m (video)")
+  [ ${#miss[@]} = 0 ] || { echo "Missing or too old: ${miss[*]}. Install each per $doc, then run check.sh --setup again."; rc=1; }
+  [ -n "${GEMINI_API_KEY:-}${ELEVENLABS_API_KEY:-}" ] || { rc=1; echo "No voice key: GEMINI_API_KEY and" \
+    "ELEVENLABS_API_KEY are both unset. Stop and ask the user one question: go on without a voice (captions only)," \
+    "set up a Gemini key, or set up an ElevenLabs key. $doc says how to get and set each."; }
+  [ "$rc" = 1 ] || echo "setup: ready"
+  return "$rc"
+}
 
 self_test() {
   local d rc=0
@@ -132,12 +176,32 @@ self_test() {
   expect 0 "a composed film whose voice.json names its voice failed" "$d/tone.mp4" --timeline "$d/named.json" --out "$d/c"
   grep -q "^sync.py $d/two.json --video $d/tone.mp4 --profile narrated --caption-box 0,0,320,40 --out" "$d/calls" ||
     { echo "  sync.py did not get the composed film's caption band: $(cat "$d/calls")"; rc=1; }
+  mkdir "$d/path" && ln -s "$(command -v bash)" "$(command -v dirname)" "$d/path/"
+  for t in ffprobe uv python3 jq tesseract sha256sum npx bun; do printf '#!/bin/sh\n' > "$d/path/$t" && chmod +x "$d/path/$t"; done
+  printf '#!/bin/sh\necho libx264\n' > "$d/path/ffmpeg" && printf '#!/bin/sh\necho v22.0.0\n' > "$d/path/node"
+  chmod +x "$d/path/ffmpeg" "$d/path/node"
+  export WHISPER_MODEL=small.en HF_HUB_CACHE="$d/hub" && mkdir -p "$d/hub/models--Systran--faster-whisper-small.en/snapshots/x"
+  : > "$d/hub/models--Systran--faster-whisper-small.en/snapshots/x/model.bin"
+  PATH="$d/path" ELEVENLABS_API_KEY=sk-setup-selftest GEMINI_API_KEY='' expect 0 "setup with every tool and one key failed" --setup compose
+  says "^setup: ready$" "the ready machine"
+  PATH="$d/path" GEMINI_API_KEY='' ELEVENLABS_API_KEY='' expect 1 "setup with no voice key passed" --setup
+  says "^No voice key: .*Stop and ask the user" "the missing voice key"
+  printf '#!/bin/sh\necho v20.1.0\n' > "$d/path/node"
+  PATH="$d/path" GEMINI_API_KEY=sk-setup-selftest expect 1 "setup for a composed film on Node 20 passed" --setup compose
+  says "^Missing or too old: node \(compose\)\." "Node 20 for a composed film"
+  ! grep -q sk-setup-selftest "$d/last.txt" || { echo "  setup printed a key"; rc=1; }
+  printf '#!/bin/sh\n' > "$d/path/ffmpeg" && rm "$d/hub/models--Systran--faster-whisper-small.en/snapshots/x/model.bin"
+  PATH="$d/path" GEMINI_API_KEY=sk-setup-selftest expect 1 "setup with no libx264 and no speech model passed" --setup
+  says "^Missing or too old: ffmpeg \(video\) faster-whisper small.en \(video\)\. Install each per .*/references/setup.md" "the ffmpeg with no libx264 and the speech model not downloaded"
+  expect 2 "setup took an unknown picture kind" --setup desktop
+  expect 2 "setup took an empty picture kind" --setup ""
   [ "$rc" = 0 ] && echo "check.sh self-test: PASS" || echo "check.sh self-test: FAIL"
   return "$rc"
 }
 
 case "${1:-}" in
   ""|-h|--help) sed '1d;/^[^#]/,$d;s/^# \{0,1\}//' "$0"; exit 0 ;;
+  --setup) shift; setup "$@"; exit $? ;;
   --self-test) self_test; exit $? ;;
 esac
 

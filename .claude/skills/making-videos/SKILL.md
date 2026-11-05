@@ -24,6 +24,7 @@ Each rule cost the user at least one round of rework. They outrank every brief, 
 
 Copy these into your todo list. Each ends on its done-when.
 
+0. **Setup.** Run `scripts/check.sh --setup` with each picture kind the request names (`web`, `android`, `ios`, `compose`; see step 4). Done when it prints `setup: ready`, or its one line left is the voice key and the user chose captions only.
 1. **Brief.** Write `BRIEF.md` in `~/Videos/<project>/src/`: the audience and what they know, where it plays, the one sentence they leave with, length, kind, truth sources, the identities allowed on screen, and the voice. Name the identities by pattern from the seed, such as every `<name>@example.com` it signs in, wherever they show, URLs and the status bar included. Each pattern matches only identities the seed created. Done when you have checked it against each rule above and nothing in it contradicts one.
 2. **Script.** Write `script.json` and `CLAIMS.md` per [references/story.md](references/story.md). For a recorded app, check each line that says what the screen shows against the screen at the moment the line plays, from the state the take starts in, not only against the docs: two scripts voiced what the docs say while the screen showed otherwise, and each cost a watch round. Done when every line has its source in `CLAIMS.md`.
 3. **Voice.** `scripts/narrate.py script.json` writes `narration.wav` and `voice.json`, the clock every later block reads. Render a chapter in two or three voices with `--voices` for the user to hear. The default is Gemini's Iapetus, then ElevenLabs' Mark, then captions only; say which one ran. When `narrate.py` prints more than 175 words a minute while speaking in a Gemini voice, slow it with `--style`, never by stretching its audio. Mark has no speed setting, so take his pace as it comes, up to 205, and do not add commas or split lines to slow him. A voice at 0.7, stretched again so each caption held 1.5 s, sounded to the user "like it is talking 0.5x"; that hold is for captions-only videos. Done when the user has picked the voice by ear (or you logged the default because the user said to run without stopping), and `narrate.py` reports a longest quiet gap of 0.5 s or less in that voice. A captions-only video runs `--voice captions` and has no voice to pick. Every take and scene is timed to this file, so a later voice change means new takes.
@@ -59,7 +60,7 @@ Copy these into your todo list. Each ends on its done-when.
 
 ## Scripts
 
-All in `scripts/`. Each prints `--help`, takes parameters, and has a self-test; `scripts/self-test` runs them all. Run each as an executable so its `uv run --script` shebang installs what it declares. They need ffmpeg, uv, jq, tesseract, Node 22+ and Chromium; web capture also needs Xvfb, xdotool and agent-browser.
+All in `scripts/`. Each prints `--help`, takes parameters, and has a self-test; `scripts/self-test` runs them all. Run each as an executable so its `uv run --script` shebang installs what it declares. The tools they need are in [references/setup.md](references/setup.md).
 
 | Script | Block |
 | --- | --- |
@@ -67,7 +68,7 @@ All in `scripts/`. Each prints `--help`, takes parameters, and has a self-test; 
 | `window.py`, `drive.py`, `cdp.mjs`, `mask.js` | web capture: full window on Xvfb, human input, events log, privacy mask |
 | `cut.py` | cut takes from `EDIT.json`: one scale, rings, outlines, captions, chips, voice |
 | `mix.sh`, `music.sh` | voice plus an optional music bed, ducked, to -16 LUFS |
-| `check.sh` (runs `sync.py`, `framing.py`, `overlays.py`, `framediff.py`) | checks on the export |
+| `check.sh` (runs `sync.py`, `framing.py`, `overlays.py`, `framediff.py`) | checks on the export; `--setup` checks the machine first |
 | `frames.py` | frames by index for your eyes and the watchers' |
 
 `templates/remotion/` is the starter for composed films.
