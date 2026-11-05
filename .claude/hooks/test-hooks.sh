@@ -20,6 +20,9 @@ check() { expect "$1" "$2" "$(jq -n --arg c "$4" --argjson bg "$3" '{tool_input:
 # prompt <want> <prompt>
 prompt() { expect refuse-pasted-secrets.py "$1" "$(jq -n --arg p "$2" '{prompt: $p}')"; }
 
+# final <want> <last assistant message>
+final() { expect refuse-bare-pr-numbers.py "$1" "$(jq -n --arg m "$2" '{last_assistant_message: $m}')"; }
+
 burn=refuse-cpu-burners.py
 check $burn 2 false 'timeout 580 bash -c "until grep -q sha_after run.log; do read -t 5 < <(:; exec cat /dev/zero >/dev/null) 2>/dev/null || true; done"'
 check $burn 2 false "timeout 280 bash -c 'while ! gh pr view 6025 --json state | grep -q MERGED; do read -t 6 < /dev/zero 2>/dev/null || true; done'"
@@ -73,6 +76,22 @@ prompt 0 'why does the sk-ant-... token fail with 401?'
 prompt 0 'rename task-runner-for-the-deal-flow-scout to scout'
 prompt 0 'set OPENAI_API_KEY=sk-your-openai-key-goes-here in .env'
 prompt 0 'what does AKIA mean in the IAM console?'
+
+pr=https://github.com/3yhealth/monorepo/pull
+final 2 'Merged #6025. CI is green on the rebased stack.'
+final 2 'Opened PR 6031 and PR #6032; both wait on review.'
+final 2 "Merged $pr/6025, and #6026 still waits on CI."
+final 2 'The glossary fix is in issues #108 and #107.'
+final 0 "Merged $pr/6025 and opened $pr/6031."
+final 0 "Merged [#6025]($pr/6025)."
+final 0 "#6025 ($pr/6025) is merged."
+final 0 "The commit ends with \`Closes #108\`."
+final 0 "$(printf '%s\n' 'The log:' '```' 'PR #6025 merged' '```')"
+final 0 'Step #1 is done, and the theme uses #1e1e2e.'
+final 0 'The border uses #333333.'
+final 0 'Issue 1 is a crash. Issue 2 is a false positive.'
+final 0 "$(printf '%s\n' '~~~' 'Merged #6025' '~~~')"
+expect refuse-bare-pr-numbers.py 0 '{"last_assistant_message": "Merged #6025.", "stop_hook_active": true}'
 
 # Three 1-second jobs through two slots: two start at once, the third waits, so about 2 seconds.
 runtime=$(mktemp -d)

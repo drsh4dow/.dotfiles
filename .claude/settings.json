@@ -80,6 +80,17 @@
           }
         ]
       }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"${CLAUDE_CONFIG_DIR:-$HOME/.claude}/hooks/refuse-bare-pr-numbers.py\"",
+            "timeout": 10
+          }
+        ]
+      }
     ]
   },
   "worktree": {
