@@ -60,7 +60,7 @@ Copy these into your todo list. Each ends on its done-when.
 
 ## Scripts
 
-All in `scripts/`. Each prints `--help`, takes parameters, and has a self-test; `scripts/self-test` runs them all. Run each as an executable so its `uv run --script` shebang installs what it declares. The tools they need are in [references/setup.md](references/setup.md).
+All in `scripts/`. Each prints `--help`, takes parameters, and has a self-test; `scripts/self-test` runs them all. Run each as an executable so its `uv run --quiet --script` shebang installs what it declares. The tools they need are in [references/setup.md](references/setup.md).
 
 | Script | Block |
 | --- | --- |
