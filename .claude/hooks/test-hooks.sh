@@ -10,7 +10,7 @@ expect() {
   local out got
   out=$(printf '%s' "$3" | "$dir/$1" 2>/dev/null)
   got=$?
-  case $out in *'"decision": "block"'*) got=block ;; esac
+  case $out in *'"decision": "block"'*'"suppressOriginalPrompt": true'*) got=block ;; esac
   [ "$got" = "$2" ] || { echo "FAIL $1 want $2 got $got: $3"; fails=$((fails + 1)); }
 }
 
@@ -151,8 +151,9 @@ rmcheck 0 'rm -f /tmp/claude-1000/qb.txt'
 rmcheck 0 'rm -f /tmp/claude-review.txt'
 rmcheck 0 "rm -rf /tmp/claude-\$(id -u)/-home-drsh4dow-Projects-3yhealth/$own/scratchpad/x"
 rmcheck 0 'rm -rf dist' "$proj/$own/scratchpad"
+rmcheck 0 "docker run --rm -v $proj/$other:/x alpine ls /x"
 
-# disk <mounts it warns about> <df rows: device, KB size, KB used, KB free, use%, mount>, through a fake df
+# disk <how many disks it warns about> <df rows: device, KB size, KB used, KB free, use%, mount>, through a fake df
 fakebin=$(mktemp -d)
 cat > "$fakebin/df" <<'EOF'
 #!/bin/sh

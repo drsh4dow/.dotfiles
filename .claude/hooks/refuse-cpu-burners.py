@@ -8,7 +8,7 @@ passed 460. Idle waits such as `python3 -c "import time; time.sleep(20)"` pass, 
 no CPU. Agents also wait with foreground loops that sleep, such as
 `until grep -q PASS run.log; do sleep 15; done`, each holding the turn until it ends. Of 172,613
 Bash commands in the 8 days to 2026-11-05 the hook refuses 2,649, all but 34 of them such loops.
-A sleep after a shell loop's done passes, and so does a loop run with run_in_background: true. A
+A sleep after a shell loop's done usually passes, and so does a loop run with run_in_background: true. A
 sleep after a one-line Python loop, as in `for r in rows: print(r)`, is refused.
 """
 
@@ -28,7 +28,7 @@ BOUNDED = re.compile(r"\|\s*head\b|\bcount=")
 SPIN = re.compile(r"\b(while|until)\b[^\n]*?;\s*do\s+(:|true)\s*;?\s*done\b")
 # A search for the pattern only names it.
 SEARCH = re.compile(r"^\s*(\S+=\S*\s+)*(grep|egrep|rg|pgrep|pkill|ag|git\s+grep|git\s+log)\b")
-# A shell or Python loop that sleeps in its body. It reads the raw command, since the loop often
+# A shell or Python loop that sleeps. It reads the raw command, since the loop often
 # sits inside `bash -c '...'` or a heredoc.
 POLL = re.compile(r"\b(while|until)\s+sleep\b|\b(while|until|for)\b[^\n]*?([;\n]\s*do\b|:\s)((?!\bdone\b).)*?\bsleep\b", re.S)
 

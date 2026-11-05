@@ -25,24 +25,15 @@ def outside_own(path: str) -> bool:
     if not root:
         return False
     parts = [p for p in path[root.end():].split("/") if p]
-    if not parts:
-        return True
     # A project folder starts with "-", since it is the session's cwd with "/" turned into "-". A
     # "*" or "$" counts too, since a glob or a variable can stand for a project folder.
-    if not parts[0].startswith(("-", "*", "$")):
-        return False
-    return len(parts) == 1 or parts[1] != own
+    return not parts or parts[0][0] in "-*$" and parts[1:2] != [own]
 
 
-# Each word resolves against the cwd, or against the folder an earlier cd in the command moved to.
-here = event.get("cwd") or ""
-paths = []
 words = re.findall(r"(?:\$\([^)]*\)|[^\s'\";|&()<>=])+", command)
-for prev, word in zip([""] + words, words):
-    paths.append(os.path.normpath(os.path.join(here, word)))
-    if prev == "cd":
-        here = paths[-1]
-deletes = re.search(r"\brm(dir|tree)?\b|\s--?delete\b", command)
+paths = [os.path.normpath(os.path.join(event.get("cwd") or "", word)) for word in words]
+# A leading "-" keeps docker's --rm from counting as a delete.
+deletes = re.search(r"(?<!-)\brm(dir|tree)?\b|\s--?delete\b", command)
 if not (deletes and (re.search(r"claude-?\*", command) or any(map(outside_own, paths)))):
     sys.exit(0)
 print(
