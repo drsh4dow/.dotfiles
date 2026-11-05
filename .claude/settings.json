@@ -112,8 +112,7 @@
   },
   "enabledPlugins": {
     "cc-plugin-telemetry@builtin": false,
-    "pstack@cursor-plugins": true,
-    "skills-for-real-engineers@anthropic-plugin-directory": true
+    "pstack@cursor-plugins": true
   },
   "extraKnownMarketplaces": {
     "cursor-plugins": {
