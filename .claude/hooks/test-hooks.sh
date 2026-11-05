@@ -50,8 +50,11 @@ check $burn 2 false "timeout 300 bash -lc 'until gh pr checks 6025 | grep -q pas
 check $burn 2 false "for i in \$(seq 1 30); do grep -q ready out.log && break; sleep 2; done; cat out.log"
 check $burn 2 false "$(printf '%s\n' "cat > w.sh <<'EOF'" 'until [ -f done ]; do' '  sleep 5' 'done' 'EOF' 'bash w.sh')"
 check $burn 2 false "$(printf '%s\n' "python3 - <<'EOF'" 'for r in rows:' '    time.sleep(1)' 'EOF')"
+check $burn 2 false 'while sleep 5; do grep -q PASS run.log && break; done'
+check $burn 2 false "$(printf '%s\n' 'while true' 'do' '  sleep 5' 'done')"
 expect $burn 2 '{"tool_input": {"command": "until [ -f done ]; do sleep 5; done"}}'
 check $burn 0 true 'until grep -q PASS run.log; do sleep 15; done'
+check $burn 0 true 'while sleep 5; do grep -q PASS run.log && break; done'
 check $burn 0 false 'sleep 30; gh pr checks 6025'
 check $burn 0 false "for f in *.log; do tail -1 \"\$f\"; done"
 check $burn 0 false "for f in *.log; do gzip \"\$f\"; done; sleep 1; echo done"

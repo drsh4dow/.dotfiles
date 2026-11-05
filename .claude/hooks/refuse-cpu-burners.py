@@ -5,9 +5,11 @@ A nudge, not a parser. On 2026-10-31 an agent waited with
 `until grep -q done f; do read -t 5 < <(:; exec cat /dev/zero >/dev/null); done`. The read
 returned at once, and each pass leaked a `cat` that read /dev/zero forever, so the load average
 passed 460. Idle waits such as `python3 -c "import time; time.sleep(20)"` pass, since they cost
-no CPU. In the 8 days to 2026-11-05 agents also ran 2,325 foreground loops that slept, such as
-`until grep -q PASS run.log; do sleep 15; done`, each holding the turn until it ended. A single
-sleep passes, and so does a loop run with run_in_background: true.
+no CPU. Agents also wait with foreground loops that sleep, such as
+`until grep -q PASS run.log; do sleep 15; done`, each holding the turn until it ends. Of 172,613
+Bash commands in the 8 days to 2026-11-05 the hook refuses 2,649, all but 34 of them such loops.
+A sleep after a shell loop's done passes, and so does a loop run with run_in_background: true. A
+sleep after a one-line Python loop, as in `for r in rows: print(r)`, is refused.
 """
 
 import json
@@ -28,7 +30,7 @@ SPIN = re.compile(r"\b(while|until)\b[^\n]*?;\s*do\s+(:|true)\s*;?\s*done\b")
 SEARCH = re.compile(r"^\s*(\S+=\S*\s+)*(grep|egrep|rg|pgrep|pkill|ag|git\s+grep|git\s+log)\b")
 # A shell or Python loop that sleeps in its body. It reads the raw command, since the loop often
 # sits inside `bash -c '...'` or a heredoc.
-POLL = re.compile(r"\b(while|until|for)\b[^\n]*?([;\n]\s*do\b|:\s)((?!\bdone\b).)*?\bsleep\b", re.S)
+POLL = re.compile(r"\b(while|until)\s+sleep\b|\b(while|until|for)\b[^\n]*?([;\n]\s*do\b|:\s)((?!\bdone\b).)*?\bsleep\b", re.S)
 
 
 def endless_read(item: str) -> bool:
