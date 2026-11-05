@@ -5,16 +5,23 @@ set -u
 dir=$(cd "$(dirname "$0")" && pwd)
 fails=0
 
-# check <hook> <want exit> <run_in_background> <command>
-check() {
-  local got
-  got=$(jq -n --arg c "$4" --argjson bg "$3" '{tool_input: {command: $c, run_in_background: $bg}}' |
-    python3 "$dir/$1" 2>/dev/null; echo $?)
-  [ "$got" = "$2" ] || { echo "FAIL $1 want $2 got $got: $4"; fails=$((fails + 1)); }
+# expect <hook> <want: exit status, or block for a block decision> <stdin JSON>
+expect() {
+  local out got
+  out=$(printf '%s' "$3" | "$dir/$1" 2>/dev/null)
+  got=$?
+  case $out in *'"decision": "block"'*) got=block ;; esac
+  [ "$got" = "$2" ] || { echo "FAIL $1 want $2 got $got: $3"; fails=$((fails + 1)); }
 }
 
+# check <hook> <want> <run_in_background> <command>
+check() { expect "$1" "$2" "$(jq -n --arg c "$4" --argjson bg "$3" '{tool_input: {command: $c, run_in_background: $bg}}')"; }
+
+# prompt <want> <prompt>
+prompt() { expect refuse-pasted-secrets.py "$1" "$(jq -n --arg p "$2" '{prompt: $p}')"; }
+
 burn=refuse-cpu-burners.py
-check $burn 2 false 'timeout 580 bash -c "until grep -q sha_after $F; do read -t 5 < <(:; exec cat /dev/zero >/dev/null) 2>/dev/null || true; done"'
+check $burn 2 false 'timeout 580 bash -c "until grep -q sha_after run.log; do read -t 5 < <(:; exec cat /dev/zero >/dev/null) 2>/dev/null || true; done"'
 check $burn 2 false "timeout 280 bash -c 'while ! gh pr view 6025 --json state | grep -q MERGED; do read -t 6 < /dev/zero 2>/dev/null || true; done'"
 check $burn 2 true 'until [ -f done ]; do :; done'
 check $burn 0 false 'for r in cfg/*-t2; do :; done'
@@ -43,6 +50,29 @@ check $heavy 0 false 'cat pytest.ini'
 check $heavy 0 false 'git commit -m "test: run just test in CI"'
 check $heavy 0 false "$(printf '%s\n' "cat > t.py <<'EOF'" 'import pytest' '@pytest.mark.parametrize("a", [1])' 'def test_a(a): pass' 'EOF')"
 check $heavy 0 false 'npm ci'
+
+fake=FAKE0FAKE1FAKE2FAKE3FAKE4FAKE5FAKE6FAKE7FAKE8FAKE9
+prompt block "use this key sk-$fake"
+prompt block "export OPENAI_API_KEY=sk-proj-${fake}_-$fake"
+prompt block "openrouter is sk-or-v1-$(printf '0123456789abcdef%.0s' 1 2 3 4)"
+prompt block "ANTHROPIC_API_KEY=sk-ant-api03-$fake$fake-AA"
+prompt block "CLAUDE_CODE_OAUTH_TOKEN=sk-ant-oat01-$fake$fake-AA"
+prompt block 'aws_access_key_id = AKIAFAKEFAKEFAKE0000'
+prompt block "GH_TOKEN=ghp_${fake:0:36}"
+prompt block "github_pat_11FAKE0000_$fake$fake"
+prompt block "SLACK_BOT_TOKEN=xoxb-0000000000-0000000000-$fake"
+prompt block "STRIPE_SECRET_KEY=sk_live_$fake"
+prompt block "STRIPE_SECRET_KEY=sk_test_$fake"
+prompt block "LINEAR_API_KEY=lin_api_$fake"
+prompt block "OP_SERVICE_ACCOUNT_TOKEN=ops_eyJ$fake"
+prompt block "GITLAB_TOKEN=glpat-${fake:0:20}"
+prompt block "NPM_TOKEN=npm_${fake:0:36}"
+prompt block "GOOGLE_API_KEY=AIzaSy${fake:0:33}"
+prompt 0 'store the OpenRouter key in 1Password and read it with op read op://Private/openrouter/credential'
+prompt 0 'why does the sk-ant-... token fail with 401?'
+prompt 0 'rename task-runner-for-the-deal-flow-scout to scout'
+prompt 0 'set OPENAI_API_KEY=sk-your-openai-key-goes-here in .env'
+prompt 0 'what does AKIA mean in the IAM console?'
 
 # Three 1-second jobs through two slots: two start at once, the third waits, so about 2 seconds.
 runtime=$(mktemp -d)
