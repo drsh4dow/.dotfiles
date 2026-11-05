@@ -138,9 +138,15 @@ rmcheck 2 "rm -rf /tmp/claude-\$(id -u)/-home-drsh4dow-Projects-3yhealth/$other"
 rmcheck 2 "rsync -a --delete empty/ $proj/"
 rmcheck 2 "tail -5 $proj/$other/tasks/a1.output; rm -f out.txt"
 rmcheck 2 "cd $proj/$other/scratchpad && ls; cd ~/w && rm -rf dist"
+rmcheck 2 'rm -rf /tmp/claude*'
+rmcheck 2 "python3 -c \"import shutil; shutil.rmtree('$proj/$other')\""
+rmcheck 2 "find /tmp -maxdepth 1 -name 'claude-*' -mtime +1 -exec rm -rf {} +"
+rmcheck 2 "rm -rf /tmp/claude-1000/\$p/\$s"
 rmcheck 0 "rm -rf $proj/$own/scratchpad/lever"
 rmcheck 0 "cd $proj/$own/scratchpad && rm -rf runs"
 rmcheck 0 'rm -f /tmp/claude-1000/qb.txt'
+rmcheck 0 'rm -f /tmp/claude-review.txt'
+rmcheck 0 "rm -rf /tmp/claude-\$(id -u)/-home-drsh4dow-Projects-3yhealth/$own/scratchpad/x"
 rmcheck 0 'rm -rf dist' "$proj/$own/scratchpad"
 
 # disk <want: warn or quiet> <df row: device, KB size, KB used, KB free, use%, mount>, through a fake df

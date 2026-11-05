@@ -21,13 +21,14 @@ own = event.get("session_id") or ""
 
 
 def outside_own(path: str) -> bool:
-    root = re.match(r"/(?:tmp|dev/shm)/claude-[^/]*", path)
+    root = re.match(r"/(?:tmp|dev/shm)/claude-[\d$][^/]*", path)
     if not root:
         return False
     parts = [p for p in path[root.end():].split("/") if p]
     if not parts:
         return True
-    # A project folder starts with "-", since it is the session's cwd with "/" turned into "-".
+    # A project folder starts with "-", since it is the session's cwd with "/" turned into "-". A
+    # "*" or "$" counts too, since a glob or a variable can stand for a project folder.
     if not parts[0].startswith(("-", "*", "$")):
         return False
     return len(parts) == 1 or parts[1] != own
@@ -41,11 +42,13 @@ for prev, word in zip([""] + words, words):
     paths.append(os.path.normpath(os.path.join(here, word)))
     if prev == "cd":
         here = paths[-1]
-if not (re.search(r"\brm(dir)?\b|\s--?delete\b", command) and any(map(outside_own, paths))):
+deletes = re.search(r"\brm(dir|tree)?\b|\s--?delete\b", command)
+if not (deletes and (re.search(r"claude-?\*", command) or any(map(outside_own, paths)))):
     sys.exit(0)
 print(
-    "Refused: this deletes under /tmp/claude-<uid> outside this session's own folder, where other "
-    "live sessions and their subagents keep their state.",
+    "Refused: this command deletes something and names /tmp/claude-<uid> or /dev/shm/claude-<uid> "
+    "outside this session's own folder, where other live sessions and their subagents keep their "
+    "state. If the delete is aimed elsewhere, run the read and the delete as separate commands.",
     file=sys.stderr,
 )
 print(
