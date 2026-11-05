@@ -31,7 +31,7 @@ The best change leaves the fewest lines that still read well.
 - In your first message on a task, say what an expert would do that the user did not ask for, deeper rather than bigger, per the **sharpen** skill. Skip it for a fully specified small edit.
 - Put each decision to the user in the questions tool, as an ask that says what the thing is, your pick, and a one-line reason. Put up to four in one call, and make as many calls as it takes.
 - "Propose", "draft", and "just answer" mean reply in chat and change nothing.
-- End a task with what changed and why, how you checked it and which commit each check covers, each repo you touched and whether it is pushed, and open decisions as numbered asks. Report a commit made after a review as unreviewed, or get it reviewed again. Carry over each caveat a subagent reported and each question it put to the user.
+- End a task with what changed and why, how you checked it and which commit each check covers, each repo you touched and whether it is pushed, and each open decision in the questions tool. Report a commit made after a review as unreviewed, or get it reviewed again. Carry over each caveat a subagent reported and each question it put to the user.
 
 ## Drafts
 
@@ -63,5 +63,5 @@ These rules replace poteto-mode's Autonomy section where the two differ.
 - When a line can go with every test still passing, delete it, or show with a run why it stays.
 - Run a full test suite or build through `~/.claude/hooks/slot`, as in `~/.claude/hooks/slot sh -c 'just check && just test'`, so parallel agents queue.
 - Keep CI fast. Real-app checks belong in the repo's `verify-<app>` skill. Create one with pstack's **create-verification-skill** when the repo has none.
-- File each real bug you find, after a subagent checks that no ticket covers it yet. Fix it in this session by default, not as a follow-up. Ask first only when the fix crosses the contract, as a numbered ask with the lines it would add.
+- File each real bug you find, after a subagent checks that no ticket covers it yet. Fix it in this session by default, not as a follow-up. Ask first only when the fix crosses the contract, and say the lines it would add.
 

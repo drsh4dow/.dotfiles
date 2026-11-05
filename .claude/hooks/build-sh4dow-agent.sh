@@ -1,17 +1,17 @@
 #!/usr/bin/env bash
 # Writes agents/sh4dow-agent.md with the sh4dow-mode skill, the poteto-mode skill, and pstack's
-# Claude Code adapter inlined, so each spawn starts with them in its system prompt. Before this,
-# every one of about 2,700 spawns in the week to 2026-11-05 read the same 35k characters with
-# Bash. A skill that sets disable-model-invocation cannot go in an agent's `skills:` list, and
-# an agent prompt does not expand @imports. SessionStart runs this, so a skill or pstack update
+# Claude Code adapter inlined, so each spawn starts with them in its system prompt. A skill that
+# sets disable-model-invocation cannot go in an agent's `skills:` list, and an agent prompt does
+# not expand @imports. SessionStart runs this, so a skill or pstack update
 # reaches the next session.
 set -euo pipefail
 claude=${CLAUDE_CONFIG_DIR:-$HOME/.claude}
 pstack=$claude/plugins/marketplaces/cursor-plugins/harness/pstack/claude-code
 sources=("$claude/skills/sh4dow-mode/SKILL.md" "$pstack/skills/poteto-mode/SKILL.md" "$pstack/docs/harness/claude-code.md")
-for f in "${sources[@]}"; do [ -f "$f" ] || exit 0; done
+for f in "${sources[@]}"; do [ -f "$f" ] || { echo "build-sh4dow-agent: missing $f" >&2; exit 1; }; done
 out=$claude/agents/sh4dow-agent.md
 tmp=$(mktemp "$out.XXXXXX")
+trap 'rm -f "$tmp"' EXIT
 body() { awk 'NR == 1 && /^---$/ { fm = 1; next } fm && /^---$/ { fm = 0; next } !fm' "$1"; }
 {
   cat <<EOF
@@ -27,4 +27,4 @@ EOF
     body "$f"
   done
 } >"$tmp"
-if cmp -s "$tmp" "$out"; then rm "$tmp"; else mv "$tmp" "$out"; fi
+cmp -s "$tmp" "$out" || mv "$tmp" "$out"
