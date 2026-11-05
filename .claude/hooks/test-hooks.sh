@@ -120,6 +120,24 @@ rmcheck 0 "cd $proj/$own/scratchpad && rm -rf runs"
 rmcheck 0 'rm -f /tmp/claude-1000/qb.txt'
 rmcheck 0 'rm -rf dist' "$proj/$own/scratchpad"
 
+# disk <want: warn or quiet> <df row: device, KB size, KB used, KB free, use%, mount>, through a fake df
+fakebin=$(mktemp -d)
+cat > "$fakebin/df" <<'EOF'
+#!/bin/sh
+echo "Filesystem 1024-blocks Used Available Capacity Mounted on"
+echo "$DF_ROW"
+EOF
+chmod +x "$fakebin/df"
+disk() {
+  local got=quiet
+  [ -n "$(DF_ROW=$2 PATH=$fakebin:$PATH "$dir/warn-low-disk.sh")" ] && got=warn
+  [ "$got" = "$1" ] || { echo "FAIL warn-low-disk.sh want $1 got $got: $2"; fails=$((fails + 1)); }
+}
+disk quiet '/dev/nvme0n1p2 975711232 711966208 263745024 73% /'
+disk warn '/dev/nvme0n1p2 975711232 912796672 62914560 94% /'
+disk quiet 'tmpfs 32768000 327680 32440320 1% /tmp'
+rm -rf "$fakebin"
+
 # Three 1-second jobs through two slots: two start at once, the third waits, so about 2 seconds.
 runtime=$(mktemp -d)
 start=$(date +%s.%N)
