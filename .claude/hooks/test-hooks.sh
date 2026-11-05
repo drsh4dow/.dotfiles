@@ -41,6 +41,20 @@ check $burn 0 false 'dd if=/dev/zero of=disk.img bs=1M count=10'
 check $burn 0 false "pgrep -af 'exec cat /dev/zero'"
 check $burn 0 false "ps -eo args | grep -c '^cat /dev/zero\$'"
 check $burn 0 false 'git commit -m "fix: stop reading /dev/zero in a loop"'
+check $burn 2 false "timeout 600 bash -c 'while true; do sleep 30; done'; echo woke"
+check $burn 2 false "for i in \$(seq 1 60); do sleep 10; done; echo waited"
+check $burn 2 false 'until grep -q PASS run.log; do sleep 15; done; cat run.log'
+check $burn 2 false "timeout 900 bash -c 'until [ \"\$(gh pr view 6025 --json state -q .state)\" = MERGED ]; do sleep 30; done'"
+check $burn 2 false "timeout 590 bash -c 'until grep -q \"gate exit=\" run.log; do sleep 5; done'"
+check $burn 2 false "timeout 300 bash -lc 'until gh pr checks 6025 | grep -q pass; do sleep 20; done'"
+check $burn 2 false "for i in \$(seq 1 30); do grep -q ready out.log && break; sleep 2; done; cat out.log"
+check $burn 2 false "$(printf '%s\n' "cat > w.sh <<'EOF'" 'until [ -f done ]; do' '  sleep 5' 'done' 'EOF' 'bash w.sh')"
+check $burn 2 false "$(printf '%s\n' "python3 - <<'EOF'" 'for r in rows:' '    time.sleep(1)' 'EOF')"
+expect $burn 2 '{"tool_input": {"command": "until [ -f done ]; do sleep 5; done"}}'
+check $burn 0 true 'until grep -q PASS run.log; do sleep 15; done'
+check $burn 0 false 'sleep 30; gh pr checks 6025'
+check $burn 0 false "for f in *.log; do tail -1 \"\$f\"; done"
+check $burn 0 false "for f in *.log; do gzip \"\$f\"; done; sleep 1; echo done"
 
 heavy=refuse-unslotted-heavy-runs.py
 check $heavy 2 false 'cd w && just check && just test'
