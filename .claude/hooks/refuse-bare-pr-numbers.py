@@ -15,11 +15,11 @@ event = json.load(sys.stdin)
 if event.get("stop_hook_active"):
     sys.exit(0)
 message = event.get("last_assistant_message") or ""
-prose = re.sub(r"(```|~~~).*?(\1|\Z)|`[^`\n]*`|https?://\S+", "", message, flags=re.S)
+prose = re.sub(r"(```|~~~).*?\1|`[^`\n]*`|https?://\S+", "", message, flags=re.S)
 linked = set(re.findall(r"https://github\.com/[^/\s]+/[^/\s]+/(?:pull|issues)/(\d+)", message))
 bare = [
     name
-    for name in re.findall(r"(?<![\w&])#\d{2,5}\b|\b(?:PRs?|pull requests?|issues?)\s+#?\d{2,}\b", prose, re.I)
+    for name in re.findall(r"(?<!&)#\d{2,5}\b|\b(?:PRs?|pull requests?|issues?)\s+#?\d{2,}\b", prose, re.I)
     if re.sub(r"\D", "", name) not in linked
 ]
 if not bare:

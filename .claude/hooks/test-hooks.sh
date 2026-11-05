@@ -103,12 +103,19 @@ final 2 'Merged #6025. CI is green on the rebased stack.'
 final 2 'Opened PR 6031 and PR #6032; both wait on review.'
 final 2 "Merged $pr/6025, and #6026 still waits on CI."
 final 2 'The glossary fix is in issues #108 and #107.'
+final 2 'Merged PR#6025.'
+final 2 'See 3yhealth/monorepo#6025.'
+final 2 'Issue 12 is still open.'
+final 2 'The fix waits on pull request 6025.'
 final 0 "Merged $pr/6025 and opened $pr/6031."
 final 0 "Merged [#6025]($pr/6025)."
 final 0 "#6025 ($pr/6025) is merged."
 final 0 "The commit ends with \`Closes #108\`."
 final 0 "$(printf '%s\n' 'The log:' '```' 'PR #6025 merged' '```')"
 final 0 'Step #1 is done, and the theme uses #1e1e2e.'
+final 0 'Escape it as &#123; in the template.'
+final 0 'Filed https://github.com/3yhealth/monorepo/issues/108 for issue #108.'
+final 0 'The steps are at https://example.com/docs/page#12.'
 final 0 'The border uses #333333.'
 final 0 'Issue 1 is a crash. Issue 2 is a false positive.'
 final 0 "$(printf '%s\n' '~~~' 'Merged #6025' '~~~')"
