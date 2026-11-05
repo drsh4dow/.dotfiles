@@ -49,6 +49,22 @@
             "type": "command",
             "command": "python3 \"${CLAUDE_CONFIG_DIR:-$HOME/.claude}/hooks/refuse-unslotted-heavy-runs.py\"",
             "timeout": 10
+          },
+          {
+            "type": "command",
+            "command": "python3 \"${CLAUDE_CONFIG_DIR:-$HOME/.claude}/hooks/refuse-other-session-deletes.py\"",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"${CLAUDE_CONFIG_DIR:-$HOME/.claude}/hooks/refuse-pasted-secrets.py\"",
+            "timeout": 10
           }
         ]
       }
@@ -65,6 +81,22 @@
           {
             "type": "command",
             "command": "bash \"${CLAUDE_CONFIG_DIR:-$HOME/.claude}/hooks/build-sh4dow-agent.sh\"",
+            "timeout": 10
+          },
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_CONFIG_DIR:-$HOME/.claude}/hooks/warn-low-disk.sh\"",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"${CLAUDE_CONFIG_DIR:-$HOME/.claude}/hooks/refuse-bare-pr-numbers.py\"",
             "timeout": 10
           }
         ]

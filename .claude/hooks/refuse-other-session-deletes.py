@@ -1,0 +1,51 @@
+#!/usr/bin/env python3
+"""Refuse a delete aimed at another session's scratchpad, or at a folder that holds them.
+
+A nudge, not a parser. On 2026-11-02 at 15:26 UTC session 8e9ef2c4-4c59-43b7-b0a3-f98b8280e6b1,
+freeing disk from ~, ran `cd /tmp/claude-1000` and then `rm -rf -- "$s"` on every session folder
+not on its keep list. That took 7675bc05's scratchpad, which held the PE-7925 orchestration state
+that session 335012c4 was still running from. A subagent's hooks get its parent's session_id, and
+it shares the parent's scratchpad, so the session's own folder stays deletable from either. The hook
+checks the whole command, since a loop or a pipeline often names the path in one part and deletes
+in another.
+"""
+
+import json
+import os
+import re
+import sys
+
+event = json.load(sys.stdin)
+command = (event.get("tool_input") or {}).get("command") or ""
+own = event.get("session_id") or ""
+
+
+def outside_own(path: str) -> bool:
+    root = re.match(r"/(?:tmp|dev/shm)/claude-[\d$][^/]*", path)
+    if not root:
+        return False
+    parts = [p for p in path[root.end():].split("/") if p]
+    # A project folder starts with "-", since it is the session's cwd with "/" turned into "-". A
+    # "*" or "$" counts too, since a glob or a variable can stand for a project folder.
+    return not parts or parts[0][0] in "-*$" and parts[1:2] != [own]
+
+
+words = re.findall(r"(?:\$\([^)]*\)|[^\s'\";|&()<>=])+", command)
+paths = [os.path.normpath(os.path.join(event.get("cwd") or "", word)) for word in words]
+# A leading "-" keeps docker's --rm from counting as a delete.
+deletes = re.search(r"(?<!-)\brm(dir|tree)?\b|\s--?delete\b", command)
+if not (deletes and (re.search(r"claude-?\*", command) or any(map(outside_own, paths)))):
+    sys.exit(0)
+print(
+    "Refused: this command deletes something and names /tmp/claude-<uid> or /dev/shm/claude-<uid> "
+    "outside this session's own folder, where other live sessions and their subagents keep their "
+    "state. If the delete is aimed elsewhere, run the read and the delete as separate commands.",
+    file=sys.stderr,
+)
+print(
+    f"Delete only under /tmp/claude-<uid>/<project>/{own}/, and name that path in the command. To "
+    "free disk, follow pstack's worktree-cleanup playbook. Keep state that must outlive a session "
+    "in ~/.local/share/<workspace>-work/<ticket>/.",
+    file=sys.stderr,
+)
+sys.exit(2)
