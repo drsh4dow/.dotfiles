@@ -12,7 +12,7 @@ const { dirname, join } = process.getBuiltinModule("node:path");
 
 type Target =
   | { kind: "create"; base: string | undefined; head: string | undefined; isDraft: boolean }
-  | { kind: "edit"; number: string };
+  | { kind: "edit"; number: string; replace: boolean };
 
 type Arguments = {
   target: Target;
@@ -34,12 +34,12 @@ class Failure {
 
 const usage =
   "expected create <body-file> --title <title> [--draft] [--base <branch>] [--head <branch>] [--repo <owner/repo>] [--template <file>], " +
-  "or edit <number> <body-file> --title <title> [--repo <owner/repo>] [--template <file>], " +
+  "or edit <number> <body-file> --title <title> [--replace] [--repo <owner/repo>] [--template <file>], " +
   "or comment <number> <comment-file> [--repo <owner/repo>]";
 
 const optionsFor = {
   create: ["--title", "--draft", "--base", "--head", "--repo", "--template"],
-  edit: ["--title", "--repo", "--template"],
+  edit: ["--title", "--replace", "--repo", "--template"],
 } as const;
 
 function parseArguments(argv: readonly string[]): Arguments | Failure {
@@ -60,7 +60,7 @@ function parseArguments(argv: readonly string[]): Arguments | Failure {
 
   for (let index = 0; index < words.length; ) {
     const name = words[index];
-    const takesValue = name !== "--draft";
+    const takesValue = name !== "--draft" && name !== "--replace";
     const value = takesValue ? words[index + 1] : "";
 
     if (!allowed.includes(name) || value === undefined || options.has(name)) {
@@ -77,7 +77,7 @@ function parseArguments(argv: readonly string[]): Arguments | Failure {
 
   const target: Target =
     verb === "edit"
-      ? { kind: "edit", number: number ?? "" }
+      ? { kind: "edit", number: number ?? "", replace: options.has("--replace") }
       : {
           kind: "create",
           base: options.get("--base"),
@@ -306,7 +306,7 @@ function publish(args: Arguments, draft: string): number {
   const { target } = args;
   let body = draft;
 
-  if (target.kind === "edit") {
+  if (target.kind === "edit" && !target.replace) {
     const live = viewPullRequest(target.number, args.repo);
 
     if (live instanceof Failure) return ghFailed(live);
