@@ -23,6 +23,11 @@ prompt() { expect refuse-pasted-secrets.py "$1" "$(jq -n --arg p "$2" '{prompt: 
 # final <want> <last assistant message>
 final() { expect refuse-bare-pr-numbers.py "$1" "$(jq -n --arg m "$2" '{last_assistant_message: $m}')"; }
 
+# rmcheck <want> <command> [cwd], run by session $own
+own=11111111-1111-4111-8111-111111111111
+other=22222222-2222-4222-8222-222222222222
+rmcheck() { expect refuse-other-session-deletes.py "$1" "$(jq -n --arg c "$2" --arg s "$own" --arg d "${3:-}" '{session_id: $s, cwd: $d, tool_input: {command: $c}}')"; }
+
 burn=refuse-cpu-burners.py
 check $burn 2 false 'timeout 580 bash -c "until grep -q sha_after run.log; do read -t 5 < <(:; exec cat /dev/zero >/dev/null) 2>/dev/null || true; done"'
 check $burn 2 false "timeout 280 bash -c 'while ! gh pr view 6025 --json state | grep -q MERGED; do read -t 6 < /dev/zero 2>/dev/null || true; done'"
@@ -92,6 +97,28 @@ final 0 'The border uses #333333.'
 final 0 'Issue 1 is a crash. Issue 2 is a false positive.'
 final 0 "$(printf '%s\n' '~~~' 'Merged #6025' '~~~')"
 expect refuse-bare-pr-numbers.py 0 '{"last_assistant_message": "Merged #6025.", "stop_hook_active": true}'
+
+proj=/tmp/claude-1000/-home-drsh4dow-Projects-3yhealth
+rmcheck 2 "$(printf '%s\n' 'cd /tmp/claude-1000 || exit 1' "for s in */*/; do case \"\$s\" in *4aac2fc5*) continue ;; esac; rm -rf -- \"\$s\"; done")"
+rmcheck 2 "cd $proj && du -sh ./* | sort -h && rm -rf -- ./$other"
+rmcheck 2 "rm -rf $proj/$other/scratchpad"
+rmcheck 2 'rm -rf /tmp/claude-1000/*'
+rmcheck 2 'find /tmp/claude-1000 -mindepth 3 -mtime +2 -delete'
+rmcheck 2 "rmdir $proj"
+rmcheck 2 "rm -rf /dev/shm/claude-1000/-home-drsh4dow/$other"
+rmcheck 2 "for s in $proj/*/; do case \$s in *$own*) continue ;; esac; rm -rf -- \"\$s\"; done"
+rmcheck 2 "ls -d $proj/*/ | grep -v $own | xargs rm -rf"
+rmcheck 2 "rm -rf -- ./$other" "$proj"
+rmcheck 2 "rm -rf $proj/$own/../$other"
+rmcheck 2 "rm -rf /tmp/claude-\$UID/*"
+rmcheck 2 "rm -rf /tmp/claude-\$(id -u)/-home-drsh4dow-Projects-3yhealth/$other"
+rmcheck 2 "rsync -a --delete empty/ $proj/"
+rmcheck 2 "tail -5 $proj/$other/tasks/a1.output; rm -f out.txt"
+rmcheck 2 "cd $proj/$other/scratchpad && ls; cd ~/w && rm -rf dist"
+rmcheck 0 "rm -rf $proj/$own/scratchpad/lever"
+rmcheck 0 "cd $proj/$own/scratchpad && rm -rf runs"
+rmcheck 0 'rm -f /tmp/claude-1000/qb.txt'
+rmcheck 0 'rm -rf dist' "$proj/$own/scratchpad"
 
 # Three 1-second jobs through two slots: two start at once, the third waits, so about 2 seconds.
 runtime=$(mktemp -d)
