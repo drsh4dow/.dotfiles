@@ -80,7 +80,9 @@ prompt block "openrouter is sk-or-v1-$(printf '0123456789abcdef%.0s' 1 2 3 4)"
 prompt block "ANTHROPIC_API_KEY=sk-ant-api03-$fake$fake-AA"
 prompt block "CLAUDE_CODE_OAUTH_TOKEN=sk-ant-oat01-$fake$fake-AA"
 prompt block 'aws_access_key_id = AKIAFAKEFAKEFAKE0000'
+prompt block 'AWS_ACCESS_KEY_ID=ASIAFAKEFAKEFAKE0000'
 prompt block "GH_TOKEN=ghp_${fake:0:36}"
+prompt block "GH_TOKEN=gho_${fake:0:36}"
 prompt block "github_pat_11FAKE0000_$fake$fake"
 prompt block "SLACK_BOT_TOKEN=xoxb-0000000000-0000000000-$fake"
 prompt block "STRIPE_SECRET_KEY=sk_live_$fake"
