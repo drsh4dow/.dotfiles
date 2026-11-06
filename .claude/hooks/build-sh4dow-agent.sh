@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Writes agents/sh4dow-agent.md with the sh4dow-mode skill, the poteto-mode skill, pstack's Claude
-# Code adapter, and the How we work section of our system prompt inlined, so each spawn starts
-# with them in its system prompt. Subagents never get our system prompt, so that section reaches
-# them only this way. A skill that sets disable-model-invocation cannot go in an agent's `skills:`
+# Code adapter, and our system prompt from its Guardrails heading down inlined, so each spawn
+# starts with them in its system prompt. Subagents never get our system prompt, so those rules reach
+# them only this way. The Harness section above Guardrails covers the main chat only. A skill that sets disable-model-invocation cannot go in an agent's `skills:`
 # list, and an agent prompt does not expand @imports. SessionStart runs this, so a skill or pstack update
 # reaches the next session.
 set -euo pipefail
@@ -11,6 +11,7 @@ pstack=$claude/plugins/marketplaces/cursor-plugins/harness/pstack/claude-code
 sources=("$claude/skills/sh4dow-mode/SKILL.md" "$pstack/skills/poteto-mode/SKILL.md" "$pstack/docs/harness/claude-code.md")
 prompt=$HOME/.dotfiles/.claude/system-prompt.md
 for f in "${sources[@]}" "$prompt"; do [ -f "$f" ] || { echo "build-sh4dow-agent: missing $f" >&2; exit 1; }; done
+grep -qx '# Guardrails' "$prompt" || { echo "build-sh4dow-agent: no '# Guardrails' heading in $prompt" >&2; exit 1; }
 out=$claude/agents/sh4dow-agent.md
 tmp=$(mktemp "$out.XXXXXX")
 trap 'rm -f "$tmp"' EXIT
@@ -28,7 +29,7 @@ EOF
     printf '\n# File: %s\n\n' "${f/#$HOME/\~}"
     body "$f"
   done
-  printf '\n# File: %s, from "# How we work"\n\n' "${prompt/#$HOME/\~}"
-  sed -n '/^# How we work$/,$p' "$prompt"
+  printf '\n# File: %s, from "# Guardrails"\n\n' "${prompt/#$HOME/\~}"
+  sed -n '/^# Guardrails$/,$p' "$prompt"
 } >"$tmp"
 cmp -s "$tmp" "$out" || mv "$tmp" "$out"
