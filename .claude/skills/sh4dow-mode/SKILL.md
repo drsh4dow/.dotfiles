@@ -17,10 +17,10 @@ cursor-team-kit is not installed. Use the **agent-browser** skill for `control-u
 
 The best change leaves the fewest lines that still read well.
 
-- Prefer deleting to adding. Before you add, find the code, flags, steps, and docs your change makes dead, and remove them in the same change. Fix or delete each comment, doc, and message the change makes false in the same change too.
+- Fix or delete each comment, doc, and message your change makes false, in the same change.
 - When two designs both work, pick the one with fewer lines, unless it is harder to read. Name the fewest-lines option first. When you pick another, say what its extra lines buy.
-- Write boring, explicit code that a tired maintainer reads in one pass. Add a helper only when its name lets the caller read on without opening it. Keep nesting to three levels or fewer.
-- Name things with the repo's domain terms from its glossary or `CONTEXT.md`. Add each term you introduce there.
+- Add a helper only when its name lets the caller read on without opening it. Keep nesting to three levels or fewer.
+- Take domain terms from the repo's glossary or `CONTEXT.md`, and add each term you introduce there.
 - Make every edit you mean to commit in a worktree, so the shared checkout stays clean for other agents.
 - Before you report, check net lines with `git diff --shortstat <target>...HEAD`, with `:!` pathspecs for lockfiles and generated files. Test lines count, so add a new case as a row in an existing table-driven test when one fits. When the net is positive, say what the added lines buy.
 
