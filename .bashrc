@@ -135,7 +135,7 @@ claude() {
   if [ -f "$cfg" ] && [ "$(jq -r --arg d "$dir" '.projects[$d].hasTrustDialogAccepted // false' "$cfg" 2>/dev/null)" != "true" ]; then
     tmp="$(mktemp "$cfg.XXXXXX")" &&
       jq --arg d "$dir" '.projects[$d] = ((.projects[$d] // {}) + {hasTrustDialogAccepted: true})' "$cfg" > "$tmp" &&
-      chmod 600 "$tmp" && mv "$tmp" "$cfg" || rm -f "$tmp"
+      chmod 600 "$tmp" && command mv "$tmp" "$cfg" || rm -f "$tmp"
   fi
   command claude --allow-dangerously-skip-permissions --system-prompt-file "$HOME/.dotfiles/.claude/system-prompt.md" "$@"
 }
