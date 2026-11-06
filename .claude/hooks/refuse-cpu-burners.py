@@ -9,17 +9,16 @@ no CPU. Agents also wait with foreground loops that sleep, such as
 `until grep -q PASS run.log; do sleep 15; done`, each holding the turn until it ends. Of 172,613
 Bash commands in the 8 days to 2026-11-05 the hook refuses 2,649, all but 34 of them such loops.
 A sleep after a shell loop's done usually passes, and so does a loop run with
-run_in_background: true or by the Monitor tool. Monitor calls reach this hook through the
-Bash matcher, have no such flag, and are killed at their timeout. A sleep after a one-line
-Python loop, as in `for r in rows: print(r)`, is refused.
+run_in_background: true. A Monitor loop that sleeps is refused, because Claude Code hands a
+Monitor call's command to Bash hooks as a plain Bash call. A sleep after a one-line Python
+loop, as in `for r in rows: print(r)`, is refused.
 """
 
 import json
 import re
 import sys
 
-event = json.load(sys.stdin)
-tool_input = event.get("tool_input") or {}
+tool_input = json.load(sys.stdin).get("tool_input") or {}
 raw = tool_input.get("command") or ""
 # Quoted text is a message or a pattern unless a shell runs it, as in `bash -c '...'`.
 command = re.sub(r"(?<!sh -c )(\"[^\"\n]*\"|'[^'\n]*')", "", raw)
@@ -41,8 +40,7 @@ def endless_read(item: str) -> bool:
 
 
 items = re.split(r"\n|;|&&|\|\||(?<![|>&])&(?![>&])", command)
-waits_off_turn = tool_input.get("run_in_background") or event.get("tool_name") == "Monitor"
-poll = not waits_off_turn and POLL.search(raw)
+poll = not tool_input.get("run_in_background") and POLL.search(raw)
 if not (poll or SPIN.search(command) or any(endless_read(item) for item in items)):
     sys.exit(0)
 print(
@@ -54,7 +52,7 @@ print(
 print(
     "To wait for a long command, run it with run_in_background: true and keep working; stop "
     "and wait for its completion notice only when nothing else is left. To wait for a "
-    "condition, use the Monitor tool (ToolSearch select:Monitor) with an until-loop that sleeps.",
+    "condition, run an until-loop that sleeps with run_in_background: true, not with Monitor.",
     file=sys.stderr,
 )
 sys.exit(2)
