@@ -1,5 +1,6 @@
 {
   "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "syncClaudeAiSkills": false,
   "env": {
     "CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS": "40",
     "TESTCONTAINERS_RYUK_DISABLED": "false",
@@ -18,12 +19,13 @@
     "sessionUrl": false
   },
   "permissions": {
-    "defaultMode": "bypassPermissions",
-    "deny": ["SendFeedback", "ReportFindings"]
+    "deny": [
+      "SendFeedback",
+      "ReportFindings"
+    ],
+    "defaultMode": "bypassPermissions"
   },
-  "enableArtifact": false,
-  "disableWorkflows": true,
-  "syncClaudeAiSkills": false,
+  "model": "opus",
   "skillOverrides": {
     "schedule": "off",
     "workflow-authoring": "off",
@@ -109,6 +111,8 @@
   "worktree": {
     "baseRef": "fresh"
   },
+  "disableWorkflows": true,
+  "enableArtifact": false,
   "statusLine": {
     "type": "command",
     "command": "jq -rf ~/.claude/statusline.jq"
@@ -132,6 +136,9 @@
     "claude-opus-5-5": {
       "effortLevel": "high",
       "autoCompactWindow": 300000
+    },
+    "claude-fable-5-1": {
+      "autoCompactWindow": 200000
     }
   },
   "promptSuggestionEnabled": false,

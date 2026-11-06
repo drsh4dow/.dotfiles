@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 # Runs one heavy command, such as a full test suite or a build, in one of CLAUDE_HEAVY_SLOTS
-# (default 2) machine-wide slots, so parallel agents queue instead of overloading the machine.
+# (default 4) machine-wide slots, so parallel agents queue instead of overloading the machine.
 # Waiting for a slot blocks in flock and uses no CPU. The slot frees when the command exits, and
 # -o keeps daemons the command starts, such as Gradle's, from holding it.
 set -uo pipefail
 [ $# -gt 0 ] || { echo "usage: slot <command> [args...]" >&2; exit 2; }
-slots=${CLAUDE_HEAVY_SLOTS:-2}
+slots=${CLAUDE_HEAVY_SLOTS:-4}
 dir=${XDG_RUNTIME_DIR:-/tmp}/claude-heavy-slots
 mkdir -p "$dir"
 for i in $(seq "$slots"); do
