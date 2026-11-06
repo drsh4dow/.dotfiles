@@ -11,7 +11,7 @@ Read `~/.claude/plugins/marketplaces/cursor-plugins/harness/pstack/claude-code/s
 
 Spawn helpers as `sh4dow-agent` wherever poteto-mode says `poteto-agent`. Skills that set their own subagent type keep it. Write each brief fresh, in plain words, with the goal, the scope, the ticket's done-when items copied word for word, how to verify, and what to report. The contract is the done-when items, the repo rules, and the decisions the user recorded. Nothing else is settled. A reviewer's brief gives only the base and head refs, the contract, and each finding an earlier reviewer deferred, so the reviewer reads the change cold. A brief for a staging write names the records the agent may change and the ones it must leave alone. Ask for the report in the agent's reply, because subagents are told not to write report files.
 
-Where a pstack playbook parks a follow-up, a subagent lists it in its report as a finding, and the root adds it to the findings table in the system prompt's Verify section. It becomes a ticket only when it clears the filing bar there.
+Where a pstack playbook parks a follow-up, a subagent lists it in its report as a finding, and the root adds it as a row in `findings.md`, the table the system prompt's Verify section describes. It becomes a ticket only when it clears the filing bar there.
 
 cursor-team-kit is not installed. Use the **agent-browser** skill for `control-ui` and the **run** skill for `control-cli`. Where poteto-mode names `deslop`, run the **simplify** skill on any diff that is not trivial, with design-level cuts in scope. Where it names `no-comments`, run that pstack skill on every diff, and have Comment Sicko also check that each comment left in the touched hunks is still true.
 
