@@ -143,7 +143,7 @@ Size each ticket as a vertical slice. It cuts a narrow path through every layer 
 
 ## Before you file
 
-- Search the tracker for the same symptom, error text, area, and cause. For a bug, an open ticket that shares the cause is a duplicate even when its symptom differs. For a confident or possible duplicate, add the new evidence to it and file nothing. When only a closed ticket shares the cause, file a new one and relate the closed one. For planned work that may overlap a ticket, file it, then comment on the match with a link and say why it is not a duplicate.
+- Search the tracker for the same symptom, error text, area, and cause. For a bug, an open ticket that shares the cause is a duplicate even when its symptom differs. Add any evidence it lacks and file nothing, whether the match is confident or possible. When only a closed ticket shares the cause, file a new one and relate the closed one. For planned work, add new evidence to a confident duplicate instead of filing. For a possible match, file it, then comment on the match with a link and say why it is not a duplicate.
 - For complex agent-facing workflow instructions inside a ticket, use the `mattpocock-skills:writing-for-agents` skill.
 
 ## Check the body
@@ -158,7 +158,7 @@ Write the body to a file and run the three gates.
 
    Run the read once. Fix every gap its answers show, then move on without a second read.
 
-   A subagent publishes only the tickets its brief asks for. A bug it found goes in its report for the root, not the tracker. Run this read yourself even when you run as a subagent, and publish only after it has run. Only when your session has no Agent tool, write the body file, publish nothing, and name the read in your report for your parent to run.
+   A subagent files only the planned-work tickets its brief asks for. It never files or comments on a bug ticket, and lists each bug it finds in its report. Run this read yourself even when you run as a subagent, and publish only after it has run. Only when your session has no Agent tool, write the body file, publish nothing, and name the read in your report for your parent to run.
 3. **Facts.** The implementer read finds gaps, not false facts. Settle each claim you marked inferred with the read that decides it, such as one query or one `curl`, or carry its label word for word into every copy of the claim, including each comment that records a decision. When the user's answer to a compliance or health-data question reads two ways, restate it to them and get a yes before you write it as a fact.
 
 Publish the same file through the tracker, then read the ticket back and compare what the tracker stored with the title and the body file. On GitHub, publish with `gh issue create --body-file` or `gh issue edit --body-file`, read back with `gh issue view <n> --json title,body`, and diff the body with `gh issue view <n> --json body --jq .body | diff <body-file> -`. Fix each difference at its cause, such as a shell expansion or a template the tracker applied, republish, and read it back once more. Report any difference that remains.
