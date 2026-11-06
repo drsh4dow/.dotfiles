@@ -131,7 +131,7 @@ export PATH="$PROTO_HOME/shims:$PROTO_HOME/bin:$PATH"
 
 # Claudex
 alias claudex='claude --settings "$HOME/.claude/cliproxy.json" --allow-dangerously-skip-permissions'
-# Auto-trust the current folder so Claude Code never shows the trust dialog
+# Auto-trust the current folder so Claude Code never shows the trust dialog, and load our own system prompt
 claude() {
   local cfg="$HOME/.claude.json" dir="$PWD" tmp
   if [ -f "$cfg" ] && [ "$(jq -r --arg d "$dir" '.projects[$d].hasTrustDialogAccepted // false' "$cfg" 2>/dev/null)" != "true" ]; then
@@ -139,7 +139,7 @@ claude() {
       jq --arg d "$dir" '.projects[$d] = ((.projects[$d] // {}) + {hasTrustDialogAccepted: true})' "$cfg" > "$tmp" &&
       chmod 600 "$tmp" && mv "$tmp" "$cfg" || rm -f "$tmp"
   fi
-  command claude --allow-dangerously-skip-permissions "$@"
+  command claude --allow-dangerously-skip-permissions --system-prompt-file "$HOME/.dotfiles/.claude/system-prompt.md" "$@"
 }
 
 # Vite+ bin (https://viteplus.dev)
