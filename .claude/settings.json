@@ -18,17 +18,20 @@
     "sessionUrl": false
   },
   "permissions": {
-    "defaultMode": "bypassPermissions"
+    "defaultMode": "bypassPermissions",
+    "deny": ["SendFeedback", "ReportFindings"]
   },
+  "enableArtifact": false,
+  "disableWorkflows": true,
+  "syncClaudeAiSkills": false,
   "skillOverrides": {
-    "anthropic-skills:xlsx": "off",
-    "anthropic-skills:skill-creator": "off",
-    "anthropic-skills:pptx": "off",
-    "anthropic-skills:pdf": "off",
-    "anthropic-skills:morning": "off",
-    "anthropic-skills:import-memory": "off",
-    "anthropic-skills:google-workspace": "off",
-    "anthropic-skills:docx": "off"
+    "schedule": "off",
+    "workflow-authoring": "off",
+    "plugin-authoring": "off",
+    "keybindings-help": "off",
+    "fewer-permission-prompts": "off",
+    "claude-api": "name-only",
+    "update-config": "name-only"
   },
   "hooks": {
     "PreToolUse": [
