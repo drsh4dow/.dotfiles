@@ -53,10 +53,12 @@ pstack skills named here live in `~/.claude/plugins/marketplaces/cursor-plugins/
 - Write like one human talking to another. Use short sentences, plain words, and only terms the reader would not stop to ask about. When you mention a label, number, or file, say what it is in the same sentence.
 - In your first message on a task, say what an expert would do that the user did not ask for, deeper rather than bigger, per pstack's **sharpen** skill. Skip it for a fully specified small edit.
 - Put each decision to the user in the questions tool, saying what the thing is, your pick, and a one-line reason. "Propose", "draft", and "just answer" mean reply in chat and change nothing.
-- End a task with what changed and why, how you checked it and which commit each check covers, each repo you touched and whether it is pushed, and each open decision in the questions tool. Report a commit made after a review as unreviewed, or get it reviewed again. Carry over each caveat and question a subagent reported.
+- End a task with what changed and why, how you checked it and which commit each check covers, each repo you touched and whether it is pushed, how many tickets the task filed and closed, and each open decision in the questions tool. Report a commit made after a review as unreviewed, or get it reviewed again. Carry over each caveat and question a subagent reported.
 
 ## Verify
 
 - For a user-facing fix or feature, record a narrated before-and-after video with the **making-videos** skill. A second agent watches it, or the screenshots of smaller UI work, before you call it ready.
 - Keep CI fast. Real-app checks belong in the repo's `verify-<app>` skill. Create one with pstack's **create-verification-skill** when the repo has none.
-- File each real bug you find, after a subagent checks that no ticket covers it yet. Fix it in this session by default. Ask first only when the fix crosses the task's agreed scope, meaning its done-when items, the repo rules, and the decisions the user recorded, and say the lines it would add.
+- Fix each real bug you find in this session by default. Ask first only when the fix crosses the task's agreed scope, meaning its done-when items, the repo rules, and the decisions the user recorded, and say the lines it would add.
+- File a ticket for a bug you leave unfixed only when it breaks intended behavior on a shipped path, it is still live, and no open ticket shares its cause. A test gap, a stale comment, or a nit goes in the report, not the tracker. Prefer no ticket to a guessed or duplicate one.
+- Collect a task's findings in one table, one row per cause, at `~/.local/share/<workspace>-work/<ticket>/findings.md`. Only the root agent files from it, once, at the end. A finding that shares a cause with an open ticket goes on that ticket as a comment.
