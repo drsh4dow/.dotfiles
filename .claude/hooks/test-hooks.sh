@@ -55,6 +55,8 @@ check $burn 2 false "$(printf '%s\n' 'while true' 'do' '  sleep 5' 'done')"
 expect $burn 2 '{"tool_input": {"command": "until [ -f done ]; do sleep 5; done"}}'
 check $burn 0 true 'until grep -q PASS run.log; do sleep 15; done'
 check $burn 0 true 'while sleep 5; do grep -q PASS run.log && break; done'
+expect $burn 0 '{"tool_name": "Monitor", "tool_input": {"command": "until [ -f done ]; do sleep 5; done"}}'
+expect $burn 2 '{"tool_name": "Monitor", "tool_input": {"command": "until [ -f done ]; do :; done"}}'
 check $burn 0 false 'sleep 30; gh pr checks 6025'
 check $burn 0 false "for f in *.log; do tail -1 \"\$f\"; done"
 check $burn 0 false "for f in *.log; do gzip \"\$f\"; done; sleep 1; echo done"

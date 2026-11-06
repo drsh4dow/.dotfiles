@@ -8,15 +8,18 @@ passed 460. Idle waits such as `python3 -c "import time; time.sleep(20)"` pass, 
 no CPU. Agents also wait with foreground loops that sleep, such as
 `until grep -q PASS run.log; do sleep 15; done`, each holding the turn until it ends. Of 172,613
 Bash commands in the 8 days to 2026-11-05 the hook refuses 2,649, all but 34 of them such loops.
-A sleep after a shell loop's done usually passes, and so does a loop run with run_in_background: true. A
-sleep after a one-line Python loop, as in `for r in rows: print(r)`, is refused.
+A sleep after a shell loop's done usually passes, and so does a loop run with
+run_in_background: true or by the Monitor tool. Monitor calls reach this hook through the
+Bash matcher, have no such flag, and are killed at their timeout. A sleep after a one-line
+Python loop, as in `for r in rows: print(r)`, is refused.
 """
 
 import json
 import re
 import sys
 
-tool_input = json.load(sys.stdin).get("tool_input") or {}
+event = json.load(sys.stdin)
+tool_input = event.get("tool_input") or {}
 raw = tool_input.get("command") or ""
 # Quoted text is a message or a pattern unless a shell runs it, as in `bash -c '...'`.
 command = re.sub(r"(?<!sh -c )(\"[^\"\n]*\"|'[^'\n]*')", "", raw)
@@ -38,7 +41,8 @@ def endless_read(item: str) -> bool:
 
 
 items = re.split(r"\n|;|&&|\|\||(?<![|>&])&(?![>&])", command)
-poll = not tool_input.get("run_in_background") and POLL.search(raw)
+waits_off_turn = tool_input.get("run_in_background") or event.get("tool_name") == "Monitor"
+poll = not waits_off_turn and POLL.search(raw)
 if not (poll or SPIN.search(command) or any(endless_read(item) for item in items)):
     sys.exit(0)
 print(
