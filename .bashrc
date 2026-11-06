@@ -129,8 +129,6 @@ export PATH="/home/drsh4dow/.moon/bin:$PATH"
 export PROTO_HOME="$XDG_DATA_HOME/proto"
 export PATH="$PROTO_HOME/shims:$PROTO_HOME/bin:$PATH"
 
-# Claudex
-alias claudex='claude --settings "$HOME/.claude/cliproxy.json" --allow-dangerously-skip-permissions'
 # Auto-trust the current folder so Claude Code never shows the trust dialog, and load our own system prompt
 claude() {
   local cfg="$HOME/.claude.json" dir="$PWD" tmp
