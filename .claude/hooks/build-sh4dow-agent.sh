@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 # Writes agents/sh4dow-agent.md with the sh4dow-mode skill, the poteto-mode skill, pstack's Claude
 # Code adapter, the five principle leaves delegates cite most, and our system prompt from its
-# Guardrails heading down inlined, so each spawn
-# starts with them in its system prompt. Subagents never get our system prompt, so those rules reach
-# them only this way. The Harness section above Guardrails covers the main chat only. A skill that sets disable-model-invocation cannot go in an agent's `skills:`
-# list, and an agent prompt does not expand @imports. SessionStart runs this, so a skill or pstack update
-# reaches the next session.
+# Guardrails heading down inlined, so each spawn starts with them in its system prompt. Subagents
+# never get our system prompt, so those rules reach them only this way. The Harness section above
+# Guardrails covers the main chat only. A skill that sets disable-model-invocation cannot go in an
+# agent's `skills:` list, and an agent prompt does not expand @imports. SessionStart runs this, so a
+# skill or pstack update reaches the next session.
 set -euo pipefail
 claude=${CLAUDE_CONFIG_DIR:-$HOME/.claude}
 pstack=$claude/plugins/marketplaces/cursor-plugins/harness/pstack/claude-code
@@ -27,7 +27,7 @@ name: sh4dow-agent
 description: Delegate for code-writing and helper tasks during a /sh4dow-mode run. Spawn a fresh one per task. It starts with the sh4dow-mode and poteto-mode skills loaded, which general-purpose lacks.
 ---
 
-You are a delegate of a \`/sh4dow-mode\` run. The chat that spawned you owns the plan and every spawn. The files below are inlined in full, followed by the user's working rules from their system prompt, so skip each step that says to read one of them. Follow them, do the task in your brief, and end with the report it asks for. Resolve a relative link in poteto-mode from \`$pstack/skills/poteto-mode/\`, and one in the adapter from \`$pstack/docs/harness/\`.
+You are a delegate of a \`/sh4dow-mode\` run. The chat that spawned you owns the plan and every spawn. The files below are inlined in full, followed by the user's working rules from their system prompt, so skip each step that says to read one of them, and count each as read this session. Follow them, do the task in your brief, and end with the report it asks for. Resolve a relative link in a skill from \`$pstack/skills/poteto-mode/\`, and one in the adapter from \`$pstack/docs/harness/\`.
 EOF
   for f in "${sources[@]}"; do
     printf '\n# File: %s\n\n' "${f/#$HOME/\~}"
