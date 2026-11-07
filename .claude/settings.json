@@ -103,6 +103,11 @@
             "type": "command",
             "command": "python3 \"${CLAUDE_CONFIG_DIR:-$HOME/.claude}/hooks/refuse-bare-pr-numbers.py\"",
             "timeout": 10
+          },
+          {
+            "type": "command",
+            "command": "python3 \"${CLAUDE_CONFIG_DIR:-$HOME/.claude}/hooks/warn-missing-decision-log.py\"",
+            "timeout": 10
           }
         ]
       }

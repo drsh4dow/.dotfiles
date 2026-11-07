@@ -174,6 +174,33 @@ disk 1 "$(printf '%s\n' '/dev/nvme0n1p2 975711232 912796672 62914560 94% /' '/de
 disk 0 'tmpfs 32768000 327680 32440320 1% /tmp'
 rm -rf "$fakebin"
 
+trail_dir=$(mktemp -d)
+trail() {
+  local want=$1 spawns=$2 command=$3 log_tool=${4:-} log_target=${5:-} active=${6:-false} t=$trail_dir/t.jsonl i
+  printf '{"type":"user","message":{"content":"<command-name>%s</command-name>"}}\n' "$command" >"$t"
+  for i in $(seq 1 "$spawns"); do
+    printf '{"type":"assistant","message":{"content":[{"type":"tool_use","id":"toolu_%s","name":"Agent","input":{}}]}}\n' "$i" >>"$t"
+    printf '{"type":"api-request-blob","messages":[{"type":"tool_use","id":"toolu_%s","name":"Agent","input":{}}]}\n' "$i" >>"$t"
+  done
+  [ -n "$log_tool" ] && jq -nc --arg n "$log_tool" --arg x "$log_target" \
+    '{type: "assistant", message: {content: [{type: "tool_use", id: "toolu_log", name: $n, input: (if $n == "Bash" then {command: $x} else {file_path: $x} end)}]}}' >>"$t"
+  expect warn-missing-decision-log.py "$want" "$(jq -n --arg t "$t" --argjson a "$active" '{transcript_path: $t, stop_hook_active: $a}')"
+}
+trail 2 15 /sh4dow-mode
+trail 2 15 /pstack:poteto-mode
+trail 0 14 /sh4dow-mode
+trail 0 20 /fast
+trail 0 15 /sh4dow-mode Bash "~/.claude/plugins/x/skills/show-me-your-work/scripts/log.sh \"\$W/decisions.tsv\" frame 'counted' 'size first' x open"
+trail 0 15 /sh4dow-mode Write /home/u/.local/share/home-work/pe-1/decisions.tsv
+trail 0 15 /sh4dow-mode Write /home/u/Projects/app/.audit/card-flow.tsv
+trail 0 15 /sh4dow-mode Edit /home/u/.local/share/home-work/pe-1/decision.tsv
+trail 2 15 /sh4dow-mode Write /tmp/claude-1000/s/scratchpad/decisions.tsv
+trail 2 15 /sh4dow-mode Bash "printf 'x\n' >> /tmp/claude-1000/s/scratchpad/decisions.tsv"
+trail 2 15 /sh4dow-mode Write /home/u/.local/share/home-work/pe-1/verdicts.tsv
+trail 0 15 /sh4dow-mode '' '' true
+expect warn-missing-decision-log.py 0 '{"transcript_path": "/nonexistent.jsonl"}'
+rm -rf "$trail_dir"
+
 # Three 1-second jobs through two slots: two start at once, the third waits, so about 2 seconds.
 runtime=$(mktemp -d)
 start=$(date +%s.%N)
