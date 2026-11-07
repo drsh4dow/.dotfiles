@@ -15,6 +15,8 @@ Where a pstack playbook parks a follow-up, a subagent lists it in its report as 
 
 cursor-team-kit is not installed. Use the **agent-browser** skill for `control-ui` and the **run** skill for `control-cli`. Where poteto-mode names `deslop`, run the **simplify** skill on any diff that is not trivial, with design-level cuts in scope. Where it names `no-comments`, run that pstack skill on every diff, and have Comment Sicko also check that each comment left in the touched hunks is still true.
 
+Claude Code has no todo panel to show a playbook's steps. Where poteto-mode says to open a todolist, put the matched playbook's steps, copied word for word, in your first reply on the task. Mark each step you will not do with `skip: <reason>`, and write the throughput checkpoint's items under the step that asks for them.
+
 ## Code
 
 The best change leaves the fewest lines that still read well.
