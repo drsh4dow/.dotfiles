@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Send a long sh4dow-mode or poteto-mode run back to start its show-me-your-work decision log.
+"""Nudge a long sh4dow-mode or poteto-mode run, at each Agent spawn and turn end, to start its decision log.
 
 Request blobs repeat earlier tool calls, so only assistant records count.
 """
@@ -46,7 +46,7 @@ if not mode_run or len(spawns) < MIN_SPAWNS or logged:
 print(
     f"This run has spawned {len(spawns)} agents and has not written a decision log outside /tmp. Per "
     "show-me-your-work, keep decisions.tsv in ~/.local/share/<workspace>-work/<ticket>/, since the "
-    f"session scratchpad gets deleted. Log the forks so far with {LOG_SH}, then finish your reply.",
+    f"session scratchpad gets deleted. Log the forks so far with {LOG_SH}.",
     file=sys.stderr,
 )
 sys.exit(2)
