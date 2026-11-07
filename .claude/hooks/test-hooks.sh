@@ -198,6 +198,17 @@ trail 2 15 /sh4dow-mode Write /tmp/claude-1000/s/scratchpad/decisions.tsv
 trail 2 15 /sh4dow-mode Bash "printf 'x\n' >> /tmp/claude-1000/s/scratchpad/decisions.tsv"
 trail 2 15 /sh4dow-mode Write /home/u/.local/share/home-work/pe-1/verdicts.tsv
 trail 0 15 /sh4dow-mode '' '' true
+trail 0 15 /sh4dow-mode Bash "~/.claude/plugins/x/skills/show-me-your-work/scripts/log.sh ~/.local/share/3yhealth-work/pe-1/control/root.tsv frame a b x open"
+trail 0 15 /sh4dow-mode Bash "printf 'r\n' >> ~/.local/share/home-work/pe-1/decisions.tsv"
+trail 2 15 /sh4dow-mode Read /home/u/.local/share/home-work/pe-1/decisions.tsv
+trail 2 15 /sh4dow-mode Bash "cat ~/Projects/promo/decisions.tsv | head -50"
+trail 2 15 /sh4dow-mode Bash "cat ~/.claude/plugins/x/skills/show-me-your-work/scripts/log.sh"
+trail 2 15 /sh4dow-mode Bash "L=~/.claude/plugins/x/skills/show-me-your-work/scripts/log.sh; bash \$L /tmp/claude-1000/s/root.tsv"
+{
+  echo '{"type":"user","message":{"content":[{"type":"tool_result","content":"<command-name>/sh4dow-mode</command-name>"}]}}'
+  for i in $(seq 1 15); do printf '{"type":"assistant","message":{"content":[{"type":"tool_use","id":"toolu_%s","name":"Agent","input":{}}]}}\n' "$i"; done
+} >"$trail_dir/quoted.jsonl"
+expect warn-missing-decision-log.py 0 "$(jq -n --arg t "$trail_dir/quoted.jsonl" '{transcript_path: $t}')"
 expect warn-missing-decision-log.py 0 '{"transcript_path": "/nonexistent.jsonl"}'
 rm -rf "$trail_dir"
 

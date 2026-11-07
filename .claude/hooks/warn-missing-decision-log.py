@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """Nudge a long sh4dow-mode or poteto-mode run, at each Agent spawn and turn end, to start its decision log.
 
-Request blobs repeat earlier tool calls, so only assistant records count.
+Request blobs and tool results repeat earlier calls and prompts, so only the assistant's own tool
+calls and the user's typed commands count.
 """
 
 import json
@@ -11,20 +12,31 @@ import sys
 from pathlib import Path
 
 MIN_SPAWNS = 15
-MODE = re.compile(rb"<command-name>/?(?:pstack:)?(?:sh4dow|poteto)-mode</command-name>")
-DECISION_LOG = re.compile(r"show-me-your-work/scripts/log\.sh|decisions?[\w.-]*\.tsv|\.audit/[\w.-]+\.tsv")
+MODE = re.compile(r"<command-name>/?(?:pstack:)?(?:sh4dow|poteto)-mode</command-name>")
+LOG_FILE = r"\S*(?:decisions?[\w.-]*|\.audit/[\w.-]+)\.tsv"
+BASH_LOG_WRITE = re.compile(rf"show-me-your-work/scripts/log\.sh['\"]?\s+(\S+\.tsv)|>>?\s*({LOG_FILE})")
 LOG_SH = Path(os.environ.get("CLAUDE_CONFIG_DIR", Path.home() / ".claude")) / (
     "plugins/marketplaces/cursor-plugins/harness/pstack/claude-code/skills/show-me-your-work/scripts/log.sh"
 )
 
 
-def tool_uses(line):
-    if b'"tool_use"' not in line or not any(k in line for k in (b'"Agent"', b".tsv", b"log.sh")):
-        return []
-    record = json.loads(line)
-    if record.get("type") != "assistant":
-        return []
-    return [b for b in record["message"].get("content", []) if b.get("type") == "tool_use"]
+def records(path):
+    with open(path, "rb") as f:
+        for line in f:
+            if b'"tool_use"' in line or b"command-name>" in line:
+                try:
+                    yield json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+
+
+def log_writes(use):
+    if use["name"] in ("Write", "Edit"):
+        path = use["input"].get("file_path", "")
+        return [path] if re.fullmatch(LOG_FILE, path) else []
+    if use["name"] == "Bash":
+        return [a or b for a, b in BASH_LOG_WRITE.findall(use["input"].get("command", ""))]
+    return []
 
 
 event = json.load(sys.stdin)
@@ -32,21 +44,22 @@ transcript = event.get("transcript_path")
 if event.get("stop_hook_active") or not transcript or not Path(transcript).is_file():
     sys.exit(0)
 
-mode_run, spawns, logged = False, set(), False
-with open(transcript, "rb") as f:
-    for line in f:
-        mode_run = mode_run or bool(MODE.search(line))
-        for use in tool_uses(line):
-            if use["name"] == "Agent":
-                spawns.add(use["id"])
-            target = use["input"].get("file_path") or use["input"].get("command") or ""
-            logged = logged or bool(DECISION_LOG.search(target) and "/tmp/" not in target)
-if not mode_run or len(spawns) < MIN_SPAWNS or logged:
+mode_run, spawns, logged = False, 0, False
+for record in records(transcript):
+    content = record.get("message", {}).get("content")
+    if record.get("type") == "user" and isinstance(content, str):
+        mode_run = mode_run or bool(MODE.search(content))
+    if record.get("type") != "assistant":
+        continue
+    for use in (b for b in content if b.get("type") == "tool_use"):
+        spawns += use["name"] == "Agent"
+        logged = logged or any("/tmp/" not in path for path in log_writes(use))
+if not mode_run or spawns < MIN_SPAWNS or logged:
     sys.exit(0)
 print(
-    f"This run has spawned {len(spawns)} agents and has not written a decision log outside /tmp. Per "
-    "show-me-your-work, keep decisions.tsv in ~/.local/share/<workspace>-work/<ticket>/, since the "
-    f"session scratchpad gets deleted. Log the forks so far with {LOG_SH}.",
+    f"This run has spawned {spawns} agents and has not written a decision log outside /tmp. Start one "
+    "with show-me-your-work, and keep it in ~/.local/share/<workspace>-work/<ticket>/ as sh4dow-mode "
+    f"asks, since the session scratchpad gets deleted. Log the forks so far with {LOG_SH}.",
     file=sys.stderr,
 )
 sys.exit(2)
