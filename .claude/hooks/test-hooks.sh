@@ -190,7 +190,7 @@ trail 2 15 /sh4dow-mode
 trail 2 15 /pstack:poteto-mode
 trail 0 14 /sh4dow-mode
 trail 0 20 /fast
-trail 0 15 /sh4dow-mode Bash "~/.claude/plugins/x/skills/show-me-your-work/scripts/log.sh \"\$W/decisions.tsv\" frame 'counted' 'size first' x open"
+trail 2 15 /sh4dow-mode Bash "~/.claude/plugins/x/skills/show-me-your-work/scripts/log.sh \"\$W/decisions.tsv\" frame 'counted' 'size first' x open"
 trail 0 15 /sh4dow-mode Write /home/u/.local/share/home-work/pe-1/decisions.tsv
 trail 0 15 /sh4dow-mode Write /home/u/Projects/app/.audit/card-flow.tsv
 trail 0 15 /sh4dow-mode Edit /home/u/.local/share/home-work/pe-1/decision.tsv
@@ -203,7 +203,16 @@ trail 0 15 /sh4dow-mode Bash "printf 'r\n' >> ~/.local/share/home-work/pe-1/deci
 trail 2 15 /sh4dow-mode Read /home/u/.local/share/home-work/pe-1/decisions.tsv
 trail 2 15 /sh4dow-mode Bash "cat ~/Projects/promo/decisions.tsv | head -50"
 trail 2 15 /sh4dow-mode Bash "cat ~/.claude/plugins/x/skills/show-me-your-work/scripts/log.sh"
-trail 2 15 /sh4dow-mode Bash "L=~/.claude/plugins/x/skills/show-me-your-work/scripts/log.sh; bash \$L /tmp/claude-1000/s/root.tsv"
+trail 2 15 /sh4dow-mode Bash "L=~/.claude/plugins/x/skills/show-me-your-work/scripts/log.sh; bash \$L ~/.local/share/home-work/pe-1/root.tsv"
+trail 0 15 /sh4dow-mode Bash "\"\$HOME/.claude/plugins/x/skills/show-me-your-work/scripts/log.sh\" ~/.local/share/home-work/pe-1/root.tsv a b c d e"
+trail 0 15 /sh4dow-mode Bash "echo header > ~/.local/share/home-work/pe-1/decisions.tsv"
+trail 2 15 /sh4dow-mode Bash "cd /tmp/claude-1000/s/scratchpad && printf 'r\n' >> decisions.tsv"
+trail 2 15 /sh4dow-mode Bash "printf 'r\n' >> \$S/decisions.tsv"
+trail 2 15 /sh4dow-mode Bash "sed -i 's|<decisions.tsv>|x|' notes.md"
+trail 2 15 /sh4dow-mode Bash "$(printf '%s\n' "cat > brief.md <<'EOF'" 'Run ~/.claude/plugins/x/skills/show-me-your-work/scripts/log.sh ~/.local/share/home-work/pe-1/decisions.tsv' 'EOF')"
+trail 0 15 /sh4dow-mode Bash "$(printf '%s\n' "cat <<'EOF' >> ~/.local/share/home-work/pe-1/decisions.tsv" 'row' 'EOF')"
+trail 2 15 /sh4dow-mode Write /home/u/.local/share/home-work/pe-1/decisions.tsv.bak
+trail 0 15 /sh4dow-mode Bash "printf 'r\n' >> ~/tmp/decisions.tsv"
 {
   echo '{"type":"user","message":{"content":[{"type":"tool_result","content":"<command-name>/sh4dow-mode</command-name>"}]}}'
   for i in $(seq 1 15); do printf '{"type":"assistant","message":{"content":[{"type":"tool_use","id":"toolu_%s","name":"Agent","input":{}}]}}\n' "$i"; done

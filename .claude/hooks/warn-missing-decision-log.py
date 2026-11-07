@@ -15,6 +15,7 @@ MIN_SPAWNS = 15
 MODE = re.compile(r"<command-name>/?(?:pstack:)?(?:sh4dow|poteto)-mode</command-name>")
 LOG_FILE = r"\S*(?:decisions?[\w.-]*|\.audit/[\w.-]+)\.tsv"
 BASH_LOG_WRITE = re.compile(rf"show-me-your-work/scripts/log\.sh['\"]?\s+(\S+\.tsv)|>>?\s*({LOG_FILE})")
+HEREDOC_BODY = re.compile(r"<<-?\s*['\"]?(\w+)['\"]?([^\n]*)\n.*?^\s*\1\s*$", re.S | re.M)
 LOG_SH = Path(os.environ.get("CLAUDE_CONFIG_DIR", Path.home() / ".claude")) / (
     "plugins/marketplaces/cursor-plugins/harness/pstack/claude-code/skills/show-me-your-work/scripts/log.sh"
 )
@@ -35,8 +36,14 @@ def log_writes(use):
         path = use["input"].get("file_path", "")
         return [path] if re.fullmatch(LOG_FILE, path) else []
     if use["name"] == "Bash":
-        return [a or b for a, b in BASH_LOG_WRITE.findall(use["input"].get("command", ""))]
+        command = HEREDOC_BODY.sub(r"\2", use["input"].get("command", ""))
+        return [a or b for a, b in BASH_LOG_WRITE.findall(command)]
     return []
+
+
+def durable(path):
+    path = path.strip("'\"")
+    return path.startswith(("/", "~", "$HOME")) and not path.startswith("/tmp/")
 
 
 event = json.load(sys.stdin)
@@ -53,13 +60,13 @@ for record in records(transcript):
         continue
     for use in (b for b in content if b.get("type") == "tool_use"):
         spawns += use["name"] == "Agent"
-        logged = logged or any("/tmp/" not in path for path in log_writes(use))
+        logged = logged or any(durable(path) for path in log_writes(use))
 if not mode_run or spawns < MIN_SPAWNS or logged:
     sys.exit(0)
 print(
-    f"This run has spawned {spawns} agents and has not written a decision log outside /tmp. Start one "
-    "with show-me-your-work, and keep it in ~/.local/share/<workspace>-work/<ticket>/ as sh4dow-mode "
-    f"asks, since the session scratchpad gets deleted. Log the forks so far with {LOG_SH}.",
+    f"This run has spawned {spawns} agents and has not written a decision log by a full path outside "
+    "/tmp. Start one with show-me-your-work in ~/.local/share/<workspace>-work/<ticket>/, since the "
+    f"session scratchpad gets deleted. Log the forks so far with {LOG_SH} and the log's full path.",
     file=sys.stderr,
 )
 sys.exit(2)
